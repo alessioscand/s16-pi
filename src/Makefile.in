@@ -1,0 +1,61 @@
+#
+# s16-pi Makefile (generated per target by build.sh)
+#
+CIRCLEHOME = @CIRCLEHOME@
+
+OBJS	= main.o kernel.o console.o games.o hiscore.o settings.o menus.o gameloop.o bench.o \
+	  report.o racing.o frame.o mcline.o \
+	  video.o ui.o fontdata.o fontlist.o ziphelp.o s16_sys.o \
+	  audio.o input.o raster.o race.o profile.o fbmap.o composite.o tvcore.o stats.o pacing.o miniz.o
+
+# The System 16 core (C++20 with the standard library) is built apart, with its own
+# flags, into libs16.a: Circle's rules (no standard C++ library) apply to
+# everything else, which sees only the C interface s16_api.h
+LIBS	= libs16.a \
+	  $(CIRCLEHOME)/addon/fatfs/libfatfs.a \
+	  $(CIRCLEHOME)/addon/SDCard/libsdcard.a \
+	  $(CIRCLEHOME)/lib/usb/libusb.a \
+	  $(CIRCLEHOME)/lib/input/libinput.a \
+	  $(CIRCLEHOME)/lib/sound/libsound.a \
+	  $(CIRCLEHOME)/lib/fs/libfs.a \
+	  $(CIRCLEHOME)/lib/libcircle.a
+
+EXTRAINCLUDE = -I @SRC@ -I @COMMON@ -I @CORE@ -isystem @MINIZ@ -isystem @NTSC@
+
+C_STANDARD = -std=gnu11
+OPTIMIZE = -O2
+
+DEFINE += -DNDEBUG -DMINIZ_NO_STDIO -DMINIZ_NO_TIME
+CFLAGS += -fno-math-errno -Wextra -Wshadow -Wno-unused-parameter	# Circle's headers have unused parameters
+
+include $(CIRCLEHOME)/Rules.mk
+
+# ---- the core ---------------------------------------------------------------
+# build.sh copies the core's sources here as <name>.core.cpp
+COREOBJ	:= $(patsubst %.core.cpp,%.core.o,$(wildcard *.core.cpp))
+COREOPT	?= -O3
+COREFLAGS = $(ARCH) $(COREOPT) -std=gnu++20 -fno-exceptions -fno-rtti -fno-math-errno \
+	    -ffunction-sections -fdata-sections $(COREWARN) -DNDEBUG -I @CORE@
+
+COREWARN = -w				# sources by others, as they are
+s16%.core.o: COREWARN = -Wall -Wextra -Wshadow	# ours
+
+%.core.o: %.core.cpp
+	@echo "  CPP   $@"
+	@$(CPP) $(COREFLAGS) -c -o $@ $<
+
+libs16.a: $(COREOBJ)
+	@echo "  AR    $@"
+	@rm -f $@
+	@$(AR) cr $@ $(COREOBJ)
+
+# the C++ runtime from the toolchain: standard library and newlib (its system
+# calls are in s16_sys.c); crtbegin/crtend run the core's static constructors
+EXTRALIBS += "$(shell $(CPP) $(ARCH) -print-file-name=libstdc++.a)" \
+	     "$(shell $(CPP) $(ARCH) -print-file-name=libsupc++.a)" \
+	     "$(shell $(CPP) $(ARCH) -print-file-name=libm.a)" \
+	     "$(shell $(CPP) $(ARCH) -print-file-name=libc.a)"
+CRTBEGIN = "$(shell $(CPP) $(ARCH) -print-file-name=crtbegin.o)"
+CRTEND   = "$(shell $(CPP) $(ARCH) -print-file-name=crtend.o)"
+
+-include $(DEPS)
