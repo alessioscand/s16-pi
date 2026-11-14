@@ -118,10 +118,10 @@ kbd  { padding: 2px 6px; border: 1px solid var(--dim); font: 600 12px/1 var(--mo
 
 .logo-svg { display: block; width: 100%; height: auto; }
 .logo-ol  { fill: var(--red); }
-.hero { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); }
+.hero { grid-template-columns: minmax(0, 400px) minmax(0, 1fr); }
 /* il logo con "bare metal" in katakana sotto, come neo-pi e m92-pi */
 .brand { display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.brand .logo { width: 100%; max-width: 280px; filter: drop-shadow(5px 5px 0 var(--cyan)); }
+.brand .logo { width: 100%; max-width: 380px; filter: drop-shadow(5px 5px 0 var(--cyan)); }
 .brand .jp { font: 900 18px/1 "M PLUS 1", sans-serif; letter-spacing: .8em; margin-right: -.8em;
              color: #EEF2F3; transform: skewX(-12deg); white-space: nowrap; }
 /* Buy me a coffee: sempre magenta, come il cuore */
@@ -355,7 +355,7 @@ footer .lines { display: grid; gap: 8px; min-width: 0; }
 .lgA::after { content: ""; position: absolute; inset: -10%; pointer-events: none; z-index: -1; transform: rotate(2deg);
   background: repeating-linear-gradient(0deg, rgba(0,0,0,.08) 0 1px, transparent 1px 3px),
               repeating-linear-gradient(90deg, rgba(0,0,0,.06) 0 1px, transparent 1px 3px); }	/* a faint CRT mask over it, turned back level */
-.lgshade { margin: 40px calc(50% - 50vw - 40px); filter: drop-shadow(0 0 12px rgba(0,0,0,.5)); }	/* depth for the torn edges; wider than the screen, cut by it */
+.lgshade { margin: 40px calc(50% - 50vw - 40px); filter: url(#lg-inner); }	/* shadow inside the torn edges; wider than the screen, cut by it */
 html, body { overflow-x: clip; }
 .lgshade .lg { margin: 0; }
 .me { color: #fff; font-weight: 700; }	/* the name in the text */
@@ -364,10 +364,22 @@ html, body { overflow-x: clip; }
 .lgA .ghost { position: absolute; left: 0; top: 0; width: 140px; image-rendering: pixelated; pointer-events: none; z-index: 2;
   opacity: 0; filter: drop-shadow(0 0 6px rgba(140,255,90,.9)) drop-shadow(0 0 18px rgba(120,255,80,.55)); will-change: transform, opacity; }
 .lgA .ghost.trail { filter: blur(1px) drop-shadow(0 0 10px rgba(140,255,90,.8)); }
+.lgA .ghost.hit { pointer-events: auto; cursor: crosshair; }	/* click the ghost to bust it */
+.lgA .ecto { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 2; border-radius: 50%;
+  background: #B6FF5C; box-shadow: 0 0 8px 2px rgba(140,255,90,.9); will-change: transform, opacity; }
+.lgA .ring { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 2; border-radius: 50%;
+  border: 3px solid #E9FFD0; box-shadow: 0 0 14px 4px rgba(140,255,90,.8), inset 0 0 10px rgba(140,255,90,.8); }
 @media (prefers-reduced-motion: reduce) { .lgA .ghost { display: none; } }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="lg-inner" x="-2%" y="-10%" width="104%" height="120%" color-interpolation-filters="sRGB">
+  <feComponentTransfer in="SourceAlpha" result="out"><feFuncA type="table" tableValues="1 0"/></feComponentTransfer>
+  <feGaussianBlur in="out" stdDeviation="12"/>
+  <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .85 0"/>
+  <feComposite in2="SourceAlpha" operator="in" result="shade"/>
+  <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="shade"/></feMerge>
+</filter></svg>
 <div class="sheet">
 
 <header class="strip">
@@ -634,20 +646,28 @@ document.fonts.ready.then(() => {
 })();
 
 /* Laser Ghost band: every 5-12 s a ghost floats across, bobbing,
-   with two fading afterimages, as in the films of the time */
+   with two fading afterimages, as in the films of the time. Click it and it
+   is busted: a flash, a shock ring and a splash of ectoplasm; another one
+   comes along a few seconds later */
 (() => {
   const band = document.querySelector('.lgA');
   if (!band || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const mk = (cls) => { const i = new Image(); i.src = 'img/lg-ghost.png'; i.alt = ''; i.className = 'ghost' + cls; band.appendChild(i); return i; };
-  const trail2 = mk(' trail'), trail1 = mk(' trail'), ghost = mk('');
+  const trail2 = mk(' trail'), trail1 = mk(' trail'), ghost = mk(' hit');
+  ghost.title = 'Bust it!';
   const parts = [[ghost, 0, 1], [trail1, 90, .35], [trail2, 180, .18]];	// element, delay ms, opacity
+  let busted = false, timer = 0, gx = 0, gy = 0, gsize = 0;
+  const next = (ms) => { clearTimeout(timer); timer = setTimeout(fly, ms); };
   function fly () {
+    busted = false;
     const w = band.clientWidth, h = band.clientHeight;
     const ltr = Math.random() < .5, size = 100 + Math.random() * 70;
     const y0 = h * (.15 + Math.random() * .5), amp = 18 + Math.random() * 30, dur = 4300 + Math.random() * 2000;
     const t0 = performance.now();
-    for (const [el] of parts) el.style.width = size + 'px';
+    gsize = size;
+    for (const [el] of parts) { el.style.width = size + 'px'; el.style.filter = ''; }
     function step (now) {
+      if (busted) return;
       let live = false;
       for (const [el, delay, op] of parts) {
         const t = (now - t0 - delay) / dur;
@@ -656,14 +676,49 @@ document.fonts.ready.then(() => {
         const x = ltr ? -size + t * (w + size * 2) : w + size - t * (w + size * 2);
         const y = y0 + Math.sin(t * Math.PI * 4) * amp;
         const tilt = Math.sin(t * Math.PI * 6) * 8;
+        if (el === ghost) { gx = x; gy = y; }
         el.style.opacity = op * Math.min(1, t * 8, (1 - t) * 8);
         el.style.transform = `translate(${x}px, ${y}px) rotate(${tilt}deg) scaleX(${ltr ? -1 : 1})`;
       }
-      if (live) requestAnimationFrame(step); else setTimeout(fly, 5000 + Math.random() * 7000);
+      if (live) requestAnimationFrame(step); else next(5000 + Math.random() * 7000);
     }
     requestAnimationFrame(step);
   }
-  setTimeout(fly, 2500);
+  ghost.addEventListener('click', () => {
+    if (busted || +ghost.style.opacity < .3) return;
+    busted = true;
+    trail1.style.opacity = trail2.style.opacity = 0;
+    const cx = gx + gsize / 2, cy = gy + ghost.offsetHeight / 2, base = ghost.style.transform;
+    // the ghost goes white, swells and is sucked into a sliver
+    const pop = ghost.animate([
+      { transform: base, filter: 'brightness(1)', opacity: 1 },
+      { transform: base + ' scale(1.25)', filter: 'brightness(4) saturate(0)', opacity: 1, offset: .2 },
+      { transform: base + ' scale(.15, 1.6)', filter: 'brightness(3) saturate(0)', opacity: 0 }
+    ], { duration: 650, easing: 'ease-in', fill: 'forwards' });
+    pop.onfinish = () => { ghost.style.opacity = 0; pop.cancel(); };
+    // the shock ring
+    const ring = document.createElement('div'); ring.className = 'ring'; band.appendChild(ring);
+    const r = gsize * .5;
+    ring.style.width = ring.style.height = r * 2 + 'px';
+    ring.animate([
+      { transform: `translate(${cx - r}px, ${cy - r}px) scale(.2)`, opacity: 1 },
+      { transform: `translate(${cx - r}px, ${cy - r}px) scale(1.6)`, opacity: 0 }
+    ], { duration: 750, easing: 'cubic-bezier(.2,.7,.3,1)' }).onfinish = () => ring.remove();
+    // the ectoplasm
+    for (let k = 0; k < 28; k++) {
+      const d = document.createElement('div'); d.className = 'ecto'; band.appendChild(d);
+      const sz = 6 + Math.random() * 12, a = Math.random() * Math.PI * 2, v = gsize * (.5 + Math.random() * .9);
+      const dx = Math.cos(a) * v, dy = Math.sin(a) * v * .8;
+      d.style.width = d.style.height = sz + 'px';
+      d.animate([
+        { transform: `translate(${cx}px, ${cy}px) scale(1)`, opacity: 1 },
+        { transform: `translate(${cx + dx * .7}px, ${cy + dy * .7}px) scale(.9)`, opacity: .9, offset: .5 },
+        { transform: `translate(${cx + dx}px, ${cy + dy + 40}px) scale(.3)`, opacity: 0 }
+      ], { duration: 1100 + Math.random() * 700, easing: 'cubic-bezier(.15,.8,.4,1)' }).onfinish = () => d.remove();
+    }
+    next(3000 + Math.random() * 3000);
+  });
+  next(2500);
 })();
 </script>
 </body>
