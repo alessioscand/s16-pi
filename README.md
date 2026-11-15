@@ -85,7 +85,7 @@ repository is the lab: s16-pi is not released yet.
 core/        the System 16B and 18 machines (s16_api.h is all the front-end sees)
 harness/     Linux test harness: make, ./s16test <roms> altbeast -s 300 -w
 tools/       gen_s16_tables.py: the game tables from MAME's driver
-common/      shared with neo-pi, nes-pi and m92-pi (pads, audio, beam racing, TV filter)
+common/      shared with neo-pi, nes-pi and m92-pi (pads, audio, beam racing, TV filter, hiscores)
 src/         the s16-pi front-end (as m92-pi's, see its README, 4.1)
 third_party/ musashi (68000) and z80 from Geolith (z80.c with one addition: a function
              of its own for the opcode fetches, for the MC8123), ymfm, miniz, snes_ntsc,

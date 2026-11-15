@@ -3,7 +3,7 @@
  * with save states and DIP switches, automatic diagnostics in LOG.TXT
  *
  * The class is implemented by area: kernel.cpp (start-up, power off),
- * console.cpp, games.cpp, hiscore.cpp, settings.cpp, menus.cpp, gameloop.cpp,
+ * console.cpp, games.cpp, saves.cpp, settings.cpp, menus.cpp, gameloop.cpp,
  * bench.cpp, report.cpp, racing.cpp.
  */
 #ifndef KERNEL_H
@@ -112,13 +112,14 @@ private:
 	void LoadDips (void);
 	void SaveDips (void);
 
-	// hiscore.cpp
+	// saves.cpp (common/hiscore.cpp does the work)
 	void HiStart (void);
 	void HiStop (void);
 	void HiTick (void);
 	void HiSave (void);
 	void NvStart (void);
 	void NvSave (void);
+	void NvClear (void);		// CLEAR MEMORY
 
 	// settings.cpp
 	static const char *FilterName (unsigned nFilter);

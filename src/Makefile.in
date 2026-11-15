@@ -3,10 +3,10 @@
 #
 CIRCLEHOME = @CIRCLEHOME@
 
-OBJS	= main.o kernel.o console.o games.o hiscore.o settings.o menus.o gameloop.o bench.o \
+OBJS	= main.o kernel.o console.o games.o saves.o settings.o menus.o gameloop.o bench.o \
 	  report.o racing.o frame.o mcline.o \
 	  video.o ui.o fontdata.o fontlist.o ziphelp.o s16_sys.o \
-	  audio.o input.o raster.o race.o profile.o fbmap.o composite.o tvcore.o stats.o pacing.o miniz.o
+	  audio.o input.o raster.o race.o profile.o fbmap.o composite.o tvcore.o stats.o pacing.o hiscore.o miniz.o
 
 # The System 16 core (C++20 with the standard library) is built apart, with its own
 # flags, into libs16.a: Circle's rules (no standard C++ library) apply to

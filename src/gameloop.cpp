@@ -667,12 +667,7 @@ boolean CKernel::PlayMenu (const u32 Pad[4])
 				// CLEAR MEMORY: as taking the battery out (credits, bookkeeping,
 				// settings, Laser Ghost's gun adjustment); the .hi table stays
 				HiSave ();
-				McSync ();
-				memset (s16_nvram (), 0, s16_nvram_size ());
-				char Path[160];
-				GamePath (Path, sizeof Path, "nv");
-				f_unlink (Path);
-				NvStart ();		// blank card; says whether the guns need adjusting
+				NvClear ();
 				P.nGunAdjust = m_bGunAdjust ? 0 : -1;
 				m_bGunAdjust = FALSE;
 				s16_reset ();
