@@ -134,7 +134,7 @@ private:
 	void ShowUIFrame (boolean bWait = TRUE, const char *pTopMessage = 0);
 	unsigned RunList (unsigned nSel);
 	void RunSystemMenu (void);
-	void RunDipMenu (void);
+	boolean RunDipMenu (void);		// TRUE: CLEAR MEMORY chosen
 	int ChoosePad (void);
 	boolean RunMapping (unsigned nSlot, boolean bOverGame);
 	boolean PowerOffCountdown (void);

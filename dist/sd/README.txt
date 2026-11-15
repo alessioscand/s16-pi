@@ -14,7 +14,7 @@ WORK IN PROGRESS
   Each game's battery-kept RAM (settings, bookkeeping, and the scores of
   the games that keep them there) is saved in s16pi/saves/<game>.nv, as
   on the real boards: credits left in a game are still there next time.
-  Delete the .nv file to start a game afresh.
+  To start a game afresh: DIP SWITCHES > CLEAR MEMORY (the last row).
 
   Laser Ghost is played with the pads instead of its 3 guns: the stick
   moves the crosshair (blue, yellow and red for players 1, 2 and 3; it
@@ -43,6 +43,8 @@ CONTROLS
 
   The first time a pad model is connected, the CONTROLS screen opens by
   itself: press the button you want for A, B, C, D, SELECT/COIN, START.
+  To skip one, press a button already assigned: it stays unassigned
+  (shown as -).
 
   Game list: Up/Down to choose, Left/Right to jump by 8, A or Start to
   play, D for OPTIONS. A long title scrolls.

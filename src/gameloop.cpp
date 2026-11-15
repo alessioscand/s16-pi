@@ -662,7 +662,28 @@ boolean CKernel::PlayMenu (const u32 Pad[4])
 			break;
 
 		case GmDips:			// over the paused game; B comes back here
-			RunDipMenu ();
+			if (RunDipMenu ())
+			{
+				// CLEAR MEMORY: as taking the battery out (credits, bookkeeping,
+				// settings, Laser Ghost's gun adjustment); the .hi table stays
+				HiSave ();
+				McSync ();
+				memset (s16_nvram (), 0, s16_nvram_size ());
+				char Path[160];
+				GamePath (Path, sizeof Path, "nv");
+				f_unlink (Path);
+				NvStart ();		// blank card; says whether the guns need adjusting
+				P.nGunAdjust = m_bGunAdjust ? 0 : -1;
+				m_bGunAdjust = FALSE;
+				s16_reset ();
+				HiStart ();
+				snprintf (P.Toast, sizeof P.Toast, "MEMORY CLEARED");
+				snprintf (P.ToastSide, sizeof P.ToastSide, "MEMORY\nCLEARED");
+				P.nToast = 180;
+				Log ("  battery RAM: cleared, reset", COLOR_TEXT);
+				P.bMenu = FALSE;
+				break;
+			}
 			P.nMenuPrev = ~0u;
 			break;
 

@@ -227,18 +227,19 @@ void CKernel::RunSystemMenu (void)
 // DIP SWITCHES (in-game menu): the game's own switches, with MAME's names and
 // settings. A changes the selected one (left/right too), B goes back. They
 // reach the board at once; many games only read them when they start, hence
-// the note. Saved per game in saves/<game>.dip.
-void CKernel::RunDipMenu (void)
+// the note. Saved per game in saves/<game>.dip. The last row, CLEAR MEMORY,
+// asks the game loop to wipe the battery RAM (returns TRUE).
+boolean CKernel::RunDipMenu (void)
 {
 	if (m_nLoaded < 0)
 	{
-		return;
+		return FALSE;
 	}
 	const int nGame = m_pGames[m_nLoaded].nGame;
 	enum { MaxItems = 24, Window = 10 };	// up to 10 on screen, the list scrolls
 	unsigned nSel = 0, nFirst = 0;
 	u32 nPrev = ~0u;
-	boolean bChanged = FALSE;
+	boolean bChanged = FALSE, bClear = FALSE;
 	const u16 nOldDsw = m_nDsw;
 
 	while (1)
@@ -266,27 +267,29 @@ void CKernel::RunDipMenu (void)
 			}
 			Dips[nItems++] = d;
 		}
-		if (nItems == 0)
-		{
-			break;
-		}
-		if (nSel >= nItems) nSel = nItems - 1;
+		const unsigned nRows = nItems + 1;	// the switches, then CLEAR MEMORY
+		if (nSel >= nRows) nSel = nRows - 1;
 
 		m_pInput->UpdateDevices ();
 		u32 n = m_pInput->GetAny ();
 		u32 nNew = nPrev == ~0u ? 0 : (n & ~nPrev);
 		nPrev = n;
-		if (nNew & BTN_UP)	nSel = (nSel + nItems - 1) % nItems;
-		if (nNew & BTN_DOWN)	nSel = (nSel + 1) % nItems;
+		if (nNew & BTN_UP)	nSel = (nSel + nRows - 1) % nRows;
+		if (nNew & BTN_DOWN)	nSel = (nSel + 1) % nRows;
 		int nDir = (nNew & (BTN_A | BTN_RIGHT)) ? 1 : ((nNew & BTN_LEFT) ? -1 : 0);
 		if (nNew & BTN_B)
 		{
 			break;
 		}
+		if (nSel == nItems && (nNew & BTN_A))
+		{
+			bClear = TRUE;
+			break;
+		}
 
 		// value of each switch, as text
 		static char Values[MaxItems][32];
-		TMenuItem Items[MaxItems];
+		TMenuItem Items[MaxItems + 1];
 		static char Labels[MaxItems][32];
 		for (unsigned i = 0; i < nItems; i++)
 		{
@@ -323,16 +326,28 @@ void CKernel::RunDipMenu (void)
 			Items[i].bDisabled = FALSE;
 		}
 
-		TS16Dip S;
-		s16_dip_get (nGame, Dips[nSel], &S);
+		Items[nItems].pLabel = "CLEAR MEMORY";	// red, as POWER OFF
+		Items[nItems].pValue = 0;
+		Items[nItems].bDisabled = FALSE;
+
+		const char *pLocation = "";
+		if (nSel < nItems)
+		{
+			TS16Dip S;
+			s16_dip_get (nGame, Dips[nSel], &S);
+			pLocation = S.pLocation;
+		}
 		const char *pMsg = bChanged ? "SOME APPLY AFTER RESET" : "";
 		if (nSel < nFirst) nFirst = nSel;
 		if (nSel >= nFirst + Window) nFirst = nSel - Window + 1;
-		if (nFirst + Window > nItems) nFirst = nItems > Window ? nItems - Window : 0;
-		unsigned nShown = nItems - nFirst < Window ? nItems - nFirst : (unsigned) Window;
+		if (nFirst + Window > nRows) nFirst = nRows > Window ? nRows - Window : 0;
+		unsigned nShown = nRows - nFirst < Window ? nRows - nFirst : (unsigned) Window;
+		// the panel keeps the same size for every game and every list length;
+		// the arrows say that there are more switches above or below
 		static const TButtonHint Hints[2] = {{'A', "CHANGE"}, {'B', "BACK"}};
-		m_pUI->DrawPanelMenu (TRUE, "DIP SWITCHES", Items + nFirst, nShown, nSel - nFirst, pMsg, UI_VALUE,
-				      Hints, 2, S.pLocation, TRUE);
+		static const TButtonHint ClearHints[2] = {{'A', "CLEAR"}, {'B', "BACK"}};
+		m_pUI->DrawPanelMenu (TRUE, "DIP SWITCHES", Items + nFirst, nShown, nSel - nFirst, pMsg, UI_WARN,
+				      nSel == nItems ? ClearHints : Hints, 2, pLocation, TRUE, Window, nFirst > 0, nFirst + nShown < nRows);
 		ShowUIFrame ();
 	}
 
@@ -343,6 +358,7 @@ void CKernel::RunDipMenu (void)
 		snprintf (Line, sizeof Line, "  DIP switches: %04X", m_nDsw);
 		Log (Line, COLOR_TEXT);
 	}
+	return bClear;
 }
 
 // CONTROLS from the SYSTEM menu: which pad? (the only one, or the one that is pressed)
@@ -387,8 +403,8 @@ int CKernel::ChoosePad (void)
 }
 
 // Asks for A B C D SELECT START in turn on one pad (directions are
-// automatic), then saves on its own. A button already used is ignored; Esc on
-// the keyboard cancels.
+// automatic), then saves on its own. A button already used skips the function
+// being asked for; Esc on the keyboard cancels.
 boolean CKernel::RunMapping (unsigned nSlot, boolean bOverGame)
 {
 	// slots in the order of the logical bits: A B C D START SELECT;
@@ -454,24 +470,16 @@ boolean CKernel::RunMapping (unsigned nSlot, boolean bOverGame)
 			if (nButton >= 0)
 			{
 				const unsigned nCur = SlotOfStep[nStep];
-				boolean bUsed = FALSE;
-				for (unsigned i = 0; i < nStep; i++)
+				TBind &B = Binds[MAP_FIRST_BUTTON + nCur];
+				if (!CInput::IsButtonBound (Binds, MAP_COUNT, nButton))
 				{
-					const TBind &rB = Binds[MAP_FIRST_BUTTON + SlotOfStep[i]];
-					if (rB.nType == BindButton && rB.nIndex == (u8) nButton)
-					{
-						bUsed = TRUE;
-					}
-				}
-				if (!bUsed)
-				{
-					TBind &B = Binds[MAP_FIRST_BUTTON + nCur];
 					B.nType = BindButton;
 					B.nIndex = (u8) nButton;
 					B.nValue = 0;
-					CInput::DescribeBind (B, Values[nCur], sizeof Values[nCur]);
-					nStep++;
 				}
+				// a button already assigned skips this function: it stays unassigned
+				CInput::DescribeBind (B, Values[nCur], sizeof Values[nCur]);
+				nStep++;
 				bWaitRelease = TRUE;
 			}
 		}

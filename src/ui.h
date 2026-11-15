@@ -22,7 +22,7 @@
 #define UI_PANEL	0x021E2Au
 #define UI_BAND		0xC81C37u
 #define UI_TITLE	0xFFFFFFu
-#define UI_VALUE	0x6EAAC3u
+#define UI_VALUE	0x46C8F0u
 #define UI_DIM		0x83B5C8u
 #define UI_WHITE	0xFFFFFFu
 #define UI_POWER	0xE8213Fu	// POWER OFF
@@ -74,7 +74,10 @@ public:
 			    const TMenuItem *pItems, unsigned nItems, unsigned nSel,
 			    const char *pMessage, u32 nMessageColor,
 			    const TButtonHint *pHints, unsigned nHints, const char *pFooter,
-			    boolean bWide = FALSE);
+			    boolean bWide = FALSE, unsigned nRows = 0,
+			    boolean bMoreAbove = FALSE, boolean bMoreBelow = FALSE);
+	// nRows: panel always sized for this many rows (a list that scrolls keeps its
+	// shape); bMoreAbove / bMoreBelow: arrows in the corners, more rows out of view
 	// Small box drawn over the current buffer contents
 	void DrawBox (const char *pLine1, const char *pLine2, const TButtonHint *pHint);
 	// Controls set-up: nStep 0-5 = A B C D START SELECT being asked, 6 = saved
