@@ -14,7 +14,6 @@ build/
 *.zip
 dist/sd/s16pi/*
 !dist/sd/s16pi/PUT_GAMES_HERE.txt
-!dist/sd/s16pi/list.txt
 # the Pi firmware has .elf files of its own
 !third_party/rpi-firmware/*.elf
 harness/obj/

@@ -49,8 +49,8 @@ public release: 1.0.0.
   - `s18_sound.cpp`: two YM3438 (ymfm) and the RF5C68 with its wave RAM.
     The output is 800 samples per game frame: the game runs at the
     screen's 60 Hz, 4.8% faster than the board, with the sound in step.
-- **Games**: `core/s16_games.inc` and `dist/sd/s16pi/list.txt` are written
-  by `tools/gen_s16_tables.py` from MAME's `segas16b.cpp` and `segas18.cpp`:
+- **Games**: `core/s16_games.inc` is written by `tools/gen_s16_tables.py`
+  from MAME's `segas16b.cpp` and `segas18.cpp`:
   80 sets (57 System 16B, 23 System 18) with their ROMs, hardware, DIP
   switches and what each input bit is (and the bits that change with a
   DIP switch, as Moonwalker's coin chutes). Left out (the script says why
@@ -58,7 +58,9 @@ public release: 1.0.0.
   16C, controls a pad does not have (trackball, dial, analog stick,
   mahjong, two sticks, Where's Wally's light gun) and, for
   now, the games on a vertical monitor (Desert Breaker, Hammer Away). Tough Turf and Wonder Boy III (set 6), whose 8751 is
-  not dumped, use MAME's stand-ins for it.
+  not dumped, use MAME's stand-ins for it. `src/gameinfo.cpp`, written
+  by hand, has what the list shows of each set (short title, year, maker)
+  and the names of its buttons.
 - **Checked against MAME 0.264** (attract mode, a frame every 150, first
   20 seconds): identical pixel for pixel on `altbeast`, `goldnaxe`,
   `goldnaxe1`, `goldnaxe2`, `goldnaxe3`, `goldnaxeu`, `aliensyn`,

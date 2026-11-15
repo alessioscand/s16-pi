@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """s16-pi: build core/s16_games.inc from MAME's Sega System 16B and System 18 drivers.
 
-    python3 tools/gen_s16_tables.py <mame>/src/mame/sega [list.txt] > core/s16_games.inc
+    python3 tools/gen_s16_tables.py <mame>/src/mame/sega > core/s16_games.inc
 
-With a second argument it also writes the names for the game list
-(dist/sd/s16pi/list.txt).
+The names in the game list, the buttons and the makers are in
+src/gameinfo.cpp, written by hand.
 
 Reads segas16b.cpp and segas18.cpp (ROM_START blocks, INPUT_PORTS, GAME
 lines) and segaipt.h, and writes plain C++ tables: ROM lists with CRCs, DIP
@@ -430,17 +430,3 @@ for g in games:
         g['inp'], g['board'], g['cpu'], g['mcu'], 'true' if g['mc8123'] else 'false', 'true' if g['ppi'] else 'false', 'true' if g['guns'] else 'false'))
 w('};')
 print('\n'.join(o))
-
-# ---------------------------------------------------------------- list.txt
-if len(sys.argv) > 2:
-    with open(sys.argv[2], 'w') as f:
-        f.write("""# s16-pi - names in the game list
-# One line per MAME set: set=Title, or set=Title|Region to choose the text
-# shown under the list too. Without |Region, the region comes from MAME's
-# name ("Golden Axe (set 6, US)" -> SET 6 US). A set missing here shows
-# MAME's full name. Titles longer than 33 characters are cut in the list.
-# Written by tools/gen_s16_tables.py; change it as you like.
-
-""")
-        for g in sorted(games, key=lambda g: g['name']):
-            f.write('%s=%s\n' % (g['name'], g['desc'].split(' (')[0]))

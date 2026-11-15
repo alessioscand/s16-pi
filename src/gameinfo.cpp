@@ -1,0 +1,105 @@
+/*
+ * s16-pi - what the game list and the screen around the game show of each set:
+ * a short title, the region under the list ("" = from MAME's name), year,
+ * maker and the names of buttons A..F (none = not known: nothing is shown).
+ * Written by hand, once: buttons from jtcores (mame2mra.toml) and
+ * controls.dat (SirPoonga, Howard Casto), checked against the games.
+ */
+#include "gameinfo.h"
+#include <string.h>
+
+static const TGameInfo s_Info[] =
+{
+	{"aliensyn", "Alien Syndrome", "", "1987", "Sega", {"Shot"}},
+	{"aliensyn3", "Alien Syndrome", "", "1987", "Sega", {"Shot"}},
+	{"aliensyn7", "Alien Syndrome", "", "1987", "Sega", {"Shot"}},
+	{"aliensynj", "Alien Syndrome", "", "1987", "Sega", {"Shot"}},
+	{"altbeast", "Altered Beast", "", "1988", "Sega", {"Punch", "Kick", "Jump"}},
+	{"altbeast2", "Altered Beast", "", "1988", "Sega", {"Punch", "Kick", "Jump"}},
+	{"altbeast4", "Altered Beast", "", "1988", "Sega", {"Punch", "Kick", "Jump"}},
+	{"altbeast5", "Altered Beast", "", "1988", "Sega", {"Punch", "Kick", "Jump"}},
+	{"altbeast6", "Altered Beast", "", "1988", "Sega", {"Punch", "Kick", "Jump"}},
+	{"altbeastj", "Juuouki", "", "1988", "Sega", {"Punch", "Kick", "Jump"}},
+	{"altbeastj1", "Juuouki", "", "1988", "Sega", {"Punch", "Kick", "Jump"}},
+	{"altbeastj3", "Juuouki", "", "1988", "Sega", {"Punch", "Kick", "Jump"}},
+	{"astorm", "Alien Storm", "", "1990", "Sega", {"Attack", "Roll", "Special"}},
+	{"astorm3", "Alien Storm", "", "1990", "Sega", {"Attack", "Roll", "Special"}},
+	{"astormj", "Alien Storm", "", "1990", "Sega", {"Attack", "Roll", "Special"}},
+	{"astormu", "Alien Storm", "", "1990", "Sega", {"Attack", "Roll", "Special"}},
+	{"aurail", "Aurail", "", "1990", "Sega / Westone", {"Shot", "Turn", "Shield"}},
+	{"aurail1", "Aurail", "", "1990", "Sega / Westone", {"Shot", "Turn", "Shield"}},
+	{"aurailj", "Aurail", "", "1990", "Sega / Westone", {"Shot", "Turn", "Shield"}},
+	{"bayroute", "Bay Route", "", "1989", "Sunsoft / Sega", {"Shot", "Jump", "Weapon"}},
+	{"bayroute1", "Bay Route", "", "1989", "Sunsoft / Sega", {"Shot", "Jump", "Weapon"}},
+	{"bayroutej", "Bay Route", "", "1989", "Sunsoft / Sega", {"Shot", "Jump", "Weapon"}},
+	{"bloxeed", "Bloxeed", "", "1989", "Sega / Elorg", {"Rotate"}},
+	{"bloxeeda", "Bloxeed", "", "1989", "Sega / Elorg", {"Rotate"}},
+	{"cltchitr", "Clutch Hitter", "", "1991", "Sega", {"Run", "Bunt", "Swing"}},
+	{"cltchitrj", "Clutch Hitter", "", "1991", "Sega", {"Run", "Bunt", "Swing"}},
+	{"cotton", "Cotton", "", "1991", "Success / Sega", {"Shot/Magic", "Bomb"}},
+	{"cottonj", "Cotton", "", "1991", "Success / Sega", {"Shot/Magic", "Bomb"}},
+	{"cottonja", "Cotton", "", "1991", "Success / Sega", {"Shot/Magic", "Bomb"}},
+	{"cottonu", "Cotton", "", "1991", "Success / Sega", {"Shot/Magic", "Bomb"}},
+	{"ddcrew", "D. D. Crew", "", "1991", "Sega", {"Attack", "Jump"}},
+	{"ddcrew1", "D. D. Crew", "", "1991", "Sega", {"Attack", "Jump"}},
+	{"ddcrew2", "D. D. Crew", "", "1991", "Sega", {"Attack", "Jump"}},
+	{"ddcrewj", "D. D. Crew", "", "1991", "Sega", {"Attack", "Jump"}},
+	{"ddcrewj2", "D. D. Crew", "", "1991", "Sega", {"Attack", "Jump"}},
+	{"ddcrewu", "D. D. Crew", "", "1991", "Sega", {"Attack", "Jump"}},
+	{"ddux", "Dynamite Dux", "", "1988", "Sega", {"Attack", "Jump"}},
+	{"ddux1", "Dynamite Dux", "", "1988", "Sega", {"Attack", "Jump"}},
+	{"dduxj", "Dynamite Dux", "", "1988", "Sega", {"Attack", "Jump"}},
+	{"eswat", "Cyber Police ESWAT", "", "1989", "Sega", {"Shot", "Jump", "Special"}},
+	{"eswatj", "Cyber Police ESWAT", "", "1989", "Sega", {"Shot", "Jump", "Special"}},
+	{"eswatj1", "Cyber Police ESWAT", "", "1989", "Sega", {"Shot", "Jump", "Special"}},
+	{"eswatu", "Cyber Police ESWAT", "", "1989", "Sega", {"Shot", "Jump", "Special"}},
+	{"fpoint", "Flash Point", "", "1989", "Sega", {"Rotate", "Rotate", "Rotate"}},
+	{"fpoint1", "Flash Point", "", "1989", "Sega", {"Rotate", "Rotate", "Rotate"}},
+	{"goldnaxe", "Golden Axe", "", "1989", "Sega", {"Attack", "Jump", "Magic"}},
+	{"goldnaxe1", "Golden Axe", "", "1989", "Sega", {"Attack", "Jump", "Magic"}},
+	{"goldnaxe2", "Golden Axe", "", "1989", "Sega", {"Attack", "Jump", "Magic"}},
+	{"goldnaxe3", "Golden Axe", "", "1989", "Sega", {"Attack", "Jump", "Magic"}},
+	{"goldnaxej", "Golden Axe", "", "1989", "Sega", {"Attack", "Jump", "Magic"}},
+	{"goldnaxeu", "Golden Axe", "", "1989", "Sega", {"Attack", "Jump", "Magic"}},
+	{"lghost", "Laser Ghost", "", "1990", "Sega", {"Trigger", "Special"}},
+	{"lghostj", "Laser Ghost", "", "1990", "Sega", {"Trigger", "Special"}},
+	{"lghostu", "Laser Ghost", "", "1990", "Sega", {"Trigger", "Special"}},
+	{"mvp", "MVP", "", "1989", "Sega", {"Change", "Select", "Chase"}},
+	{"mvpj", "MVP", "", "1989", "Sega", {"Change", "Select", "Chase"}},
+	{"mwalk", "Michael Jackson's Moonwalker", "", "1990", "Sega", {"Magic", "Dance"}},
+	{"mwalkj", "Michael Jackson's Moonwalker", "", "1990", "Sega", {"Magic", "Dance"}},
+	{"mwalku", "Michael Jackson's Moonwalker", "", "1990", "Sega", {"Magic", "Dance"}},
+	{"riotcity", "Riot City", "", "1991", "Sega / Westone", {"Attack", "Jump"}},
+	{"ryukyu", "RyuKyu", "", "1990", "Success / Sega", {"Cancel", "Decide"}},
+	{"ryukyua", "RyuKyu", "", "1990", "Success / Sega", {"Cancel", "Decide"}},
+	{"shdancer", "Shadow Dancer", "", "1989", "Sega", {"Attack", "Jump", "Magic"}},
+	{"shdancer1", "Shadow Dancer", "", "1989", "Sega", {"Attack", "Jump", "Magic"}},
+	{"shdancerj", "Shadow Dancer", "", "1989", "Sega", {"Attack", "Jump", "Magic"}},
+	{"shinobi2", "Shinobi", "", "1987", "Sega", {"Shuriken", "Jump", "Magic"}},
+	{"shinobi3", "Shinobi", "", "1987", "Sega", {"Shuriken", "Jump", "Magic"}},
+	{"shinobi4", "Shinobi", "", "1987", "Sega", {"Shuriken", "Jump", "Magic"}},
+	{"shinobi5", "Shinobi", "", "1987", "Sega", {"Shuriken", "Jump", "Magic"}},
+	{"shinobi6", "Shinobi", "", "1987", "Sega", {"Shuriken", "Jump", "Magic"}},
+	{"tetris1", "Tetris", "", "1988", "Sega", {"Rotate", "Rotate", "Rotate"}},
+	{"tetris2", "Tetris", "", "1988", "Sega", {"Rotate", "Rotate", "Rotate"}},
+	{"toryumon", "Toryumon", "", "1994", "Sega", {"Turn"}},
+	{"tturf", "Tough Turf", "", "1989", "Sega / Sunsoft", {"Punch", "Kick", "Jump"}},
+	{"tturfu", "Tough Turf", "", "1989", "Sega / Sunsoft", {"Punch", "Kick", "Jump"}},
+	{"ultracin", "Waku Waku Ultraman Racing", "", "1996", "Sega", {"Attack"}},
+	{"wb3", "Wonder Boy III: Monster Lair", "", "1988", "Sega / Westone", {"Shot", "Jump"}},
+	{"wb32", "Wonder Boy III: Monster Lair", "", "1988", "Sega / Westone", {"Shot", "Jump"}},
+	{"wb33", "Wonder Boy III: Monster Lair", "", "1988", "Sega / Westone", {"Shot", "Jump"}},
+	{"wb34", "Wonder Boy III: Monster Lair", "", "1988", "Sega / Westone", {"Shot", "Jump"}},
+};
+
+const TGameInfo *GameInfoFind (const char *pSet)
+{
+	for (const TGameInfo &I : s_Info)
+	{
+		if (strcmp (I.pSet, pSet) == 0)
+		{
+			return &I;
+		}
+	}
+	return 0;
+}
