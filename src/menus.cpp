@@ -350,8 +350,8 @@ boolean CKernel::RunDipMenu (void)
 		if (nSel >= nFirst + Window) nFirst = nSel - Window + 1;
 		if (nFirst + Window > nRows) nFirst = nRows > Window ? nRows - Window : 0;
 		unsigned nShown = nRows - nFirst < Window ? nRows - nFirst : (unsigned) Window;
-		// the panel keeps the same size for every game and every list length;
-		// the arrows say that there are more switches above or below
+		// the panel is as tall as the game's switches, up to Window rows; then
+		// the list scrolls, and the arrows say there is more above or below
 		static const TButtonHint Hints[2] = {{'A', "CHANGE"}, {'B', "BACK"}};
 		static const TButtonHint ClearHints[2] = {{'A', "CLEAR"}, {'B', "BACK"}};
 		m_pUI->DrawPanelMenu (TRUE, "DIP SWITCHES", Items + nFirst, nShown, nSel - nFirst, pMsg, UI_WARN,
