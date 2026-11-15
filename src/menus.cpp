@@ -9,19 +9,19 @@
 
 void CKernel::ShowUIFrame (boolean bWait, const char *pTopMessage)
 {
+	UpdateBezel ();
+	m_Video.BezelMenu (m_pUI->GetBuffer ());	// no game: the menu's background
 	FrameDrawPicture (m_pUI->GetBuffer ());
 	if (pTopMessage && pTopMessage[0])
 	{
-		// in the black band above the picture, like the in-game messages
+		// in the left column, where the status line goes while playing
 		const CScreen::TTextSpan Span = {pTopMessage, UI_ERR};
-		m_Video.DrawBandText (TRUE, &Span, 1);
+		m_Video.DrawSideText (FALSE, &Span, 1);
 	}
 	else
 	{
-		m_Video.DrawBandText (TRUE, 0, 0);	// no status line or message over menus
+		m_Video.DrawSideText (FALSE, 0, 0);	// no status line or message over menus
 	}
-	m_Video.DrawBandText (FALSE, 0, 0);
-	m_Video.DrawSideText (FALSE, 0, 0);	// no-op without side columns
 	m_Video.DrawSideText (TRUE, 0, 0);
 	m_Video.Flip ();
 	if (!bWait)
@@ -105,11 +105,12 @@ unsigned CKernel::RunList (unsigned nSel)
 
 void CKernel::RunSystemMenu (void)
 {
-	enum { SmFilter, SmControls, SmPower, SmCount };
+	enum { SmFilter, SmBezel, SmControls, SmPower, SmCount };
 
 	unsigned nSel = 0;
 	u32 nPrev = ~0u;
 	unsigned nOldFilter = m_nFilter;
+	boolean bOldBezel = m_bBezel;
 	const char *pMsg = "";
 	unsigned nFrame = 0;
 
@@ -159,6 +160,10 @@ void CKernel::RunSystemMenu (void)
 				}
 				break;
 
+			case SmBezel:
+				m_bBezel = !m_bBezel;		// drawn by the next frame
+				break;
+
 			case SmControls:
 				if (nNew & BTN_A)
 				{
@@ -190,7 +195,7 @@ void CKernel::RunSystemMenu (void)
 			break;
 		}
 
-		static const char *Labels[SmCount] = {"SCANLINES", "CONTROLS", "POWER OFF"};
+		static const char *Labels[SmCount] = {"SCANLINES", "BEZEL", "CONTROLS", "POWER OFF"};
 		TMenuItem Items[SmCount];
 		for (unsigned i = 0; i < SmCount; i++)
 		{
@@ -202,6 +207,7 @@ void CKernel::RunSystemMenu (void)
 		// not allowed only on a Pi 3 with multicore=off
 		Items[SmFilter].pValue = m_bFilterAllowed ? FilterLabels[m_nFilter] : "MULTICORE OFF";
 		Items[SmFilter].bDisabled = !m_bFilterAllowed;
+		Items[SmBezel].pValue = m_bBezel ? "INFO" : "OFF";
 
 		const char *pShow = pMsg;
 		u32 nShowColor = UI_VALUE;
@@ -215,11 +221,12 @@ void CKernel::RunSystemMenu (void)
 		ShowUIFrame ();
 	}
 
-	if (m_nFilter != nOldFilter)
+	if (m_nFilter != nOldFilter || m_bBezel != bOldBezel)
 	{
 		SaveConfig ();
 		char Line[120];
-		snprintf (Line, sizeof Line, "New settings: filter %s", FilterName (m_nFilter));
+		snprintf (Line, sizeof Line, "New settings: filter %s, bezel %s", FilterName (m_nFilter),
+			  m_bBezel ? "info" : "off");
 		Log (Line, COLOR_TEXT);
 	}
 }

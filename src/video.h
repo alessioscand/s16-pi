@@ -10,10 +10,13 @@
  *   - if the display is not divisible by any useful k, k = 1 (CPU only).
  * Filters (applied while drawing, no extra buffering, no added lag):
  *   scanlines in three strengths (dark rows at 75%, 50% or 25%).
- * Side columns (e.g. 720p: the picture fills the height): decided once in
- * SetGameMode; the band text then goes in the columns, drawn by the caller's
- * core (core 0) like DrawBandText: the line drawing (beam racing) does not
- * change.
+ * The border (BEZEL): black, or the UI's grid dimmed, fading out near the
+ * picture; with a game, its title above the picture and its buttons below
+ * (only where the bands are tall enough: 1080p). The status line and the
+ * messages go in the side columns, in the Area51 font with a hard shadow:
+ * drawn by the caller's core (core 0), only over the border, so the line
+ * drawing (beam racing) does not change. Text is cleared by drawing the
+ * border back.
  */
 #ifndef VIDEO_H
 #define VIDEO_H
@@ -59,8 +62,8 @@ public:
 		DrawGameLineTo (SharedLoad (m_bRacing) ? m_nBack ^ 1 : m_nBack, pSource, y, pLine, pDark);
 	}
 	void DrawNtscLine (unsigned y, const u32 *pNtsc, unsigned nNtscW, u32 *pLine) override;
-	void DrawBandText (boolean bTop, const TTextSpan *pSpans, unsigned nSpans) override;
-	boolean HasSideColumns (void) const override	{ return m_bSide; }
+	void SetBezel (unsigned nMode, const TBezelInfo *pInfo, unsigned nId) override;
+	void BezelMenu (u32 *pUIBuf) override;
 	void DrawSideText (boolean bRight, const TTextSpan *pSpans, unsigned nSpans) override;
 
 	unsigned GetPixelOrder (void) const override	{ return m_nPixelOrder; }
@@ -81,8 +84,14 @@ private:
 	}
 	void DrawChar (unsigned nBuffer, unsigned nX, unsigned nY, char ch, u32 nFG, u32 nBG,
 		       unsigned nTextScale, const CCharGenerator &Font);
-	// one 8x8 menu-font character (capitals) with its shadow, scale S
-	void DrawMenuChar (unsigned nBuf, unsigned x, unsigned y, unsigned ch, u32 nColor, unsigned S);
+	// the border
+	u32 BgPixel (unsigned x, unsigned y) const;		// framebuffer order
+	void BgRect (unsigned nBuf, unsigned x0, unsigned y0, unsigned x1, unsigned y1);
+	void FillBorder (unsigned nBuf);
+	void DrawInfoLines (unsigned nBuf);
+	// Area51 text, scale m_nU, hard shadow; nColor 0xRRGGBB; returns the next x
+	unsigned InfoWidth (const char *pText) const;
+	unsigned DrawInfoText (unsigned nBuf, unsigned x, unsigned y, const char *pText, u32 nColor);
 
 private:
 	CBcmFrameBuffer *m_pFrameBuffer;
@@ -102,10 +111,27 @@ private:
 	unsigned m_nM;				// CPU draw scale
 	unsigned m_nFilter;
 	unsigned m_nGameX, m_nGameY;		// game rectangle in the framebuffer
-	unsigned m_nStatusY;
-	unsigned m_nStatusScale;
-	unsigned m_nTopY;
+	unsigned m_nU;				// text scale (2 screen pixels per font pixel)
 	boolean	 m_bSide;			// status and messages in the side columns
+	boolean	 m_bBands;			// room for the title and the buttons
+	unsigned m_nGap;			// text from the picture and the screen edge
+	unsigned m_nColTop, m_nColBot;		// the columns' text: between these lines
+
+	// the border
+	unsigned m_nBezel;			// BEZEL_...
+	unsigned m_nBezelId;
+	boolean	 m_bBezelDrawn;			// in both buffers
+	TBezelInfo m_Info;
+	u32	 m_nBgBase, m_nBgLine;		// framebuffer order
+	u8	 m_Fade[256];			// line visibility (0-255) by distance
+	struct TRect { unsigned x0, y0, x1, y1; };	// x1, y1 excluded; empty: x1 = 0
+	TRect	 m_Text[2][2];			// [buffer][right column]: text drawn there
+	// BEZEL_MENU: distance (chamfer 3-4, capped) of each canvas cell (one UI
+	// pixel) from the nearest menu pixel that is not background
+	u8	*m_pDist;
+	unsigned m_nCW, m_nCH;			// canvas: the whole screen in UI pixels
+	unsigned m_nOX, m_nOY;			// the UI's 320x224 in the canvas
+	u32	 m_nMenuSum[2];			// what the border of each buffer shows
 
 	u32 Native (u32 c) const		// RGB() (R low) -> framebuffer order
 	{

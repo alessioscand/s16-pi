@@ -155,6 +155,7 @@ private:
 	unsigned PlayFrame (boolean bRace, boolean bScreenshot, unsigned *pT0, boolean *pOddFrame);
 	boolean PlayMenu (const u32 Pad[4]);
 	void PlayDrawBands (void);
+	void UpdateBezel (void);
 	void PlayStatusLine (unsigned nNow, unsigned *pNextDeadline);
 	const char *SaveScreenshot (void);
 
@@ -217,6 +218,7 @@ private:
 	boolean			 m_bHVS;	// FALSE: scaler=cpu
 	boolean			 m_bMultiCore;	// FALSE: multicore=off, or core 1 did not start
 	boolean			 m_bFilterAllowed;
+	boolean			 m_bBezel;	// BEZEL INFO (FALSE: bezel=off, black)
 
 	// frame pacing and the status line
 	boolean			 m_bVSync;	// FALSE: the firmware's vsync does not block
@@ -249,13 +251,12 @@ private:
 		unsigned nAimHeld[3];
 		int	 nGunAdjust;
 
-		// message in the top band, in frames
-		char	 Toast[64];
-		char	 ToastSide[32];		// the same, one word per line (side columns)
+		// message in the right column ('\n' between lines), in frames
+		char	 Toast[32];
 		unsigned nToast, nClearToast;
 
 		// status line (Select+C), refreshed once per second
-		char	 StFps[16], StLoad[8], StTemp[8], StRes[8], StScale[16], StDelay[8];
+		char	 StFps[16], StLoad[8], StTemp[8], StRes[8], StScale[16], StDelay[12];
 		u32	 nFpsColor, nLoadColor, nTempColor;
 		boolean	 bStatusReady;
 		unsigned nFrames, nSeconds, nTemp, nWinStart, nWorkMax;

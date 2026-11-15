@@ -26,6 +26,10 @@
 #define FILTER_COMPOSITE   4	// blargg's NTSC filter (tvcore.h), no dark rows
 #define FILTER_COUNT	5
 
+#define BEZEL_BLACK	0	// BEZEL OFF: black around the picture
+#define BEZEL_GAME	1	// BEZEL INFO, a game loaded: the pattern, title and buttons
+#define BEZEL_MENU	2	// BEZEL INFO, no game: the pattern under the menus
+
 // Logical colours (R in the low byte); the screen converts them if the
 // framebuffer stores red in the high byte (Pi 4)
 #define RGB(r, g, b)     (0xFF000000u | ((u32)(b) << 16) | ((u32)(g) << 8) | (u32)(r))
@@ -72,13 +76,35 @@ public:
 	// game width; pLine = scratch (GAME_W * 8)
 	virtual void DrawNtscLine (unsigned y, const u32 *pNtsc, unsigned nNtscW, u32 *pLine) = 0;
 
-	// Text in the black bands above and below the picture, or in the side
-	// columns when the picture fills the height: one item per line there ('\n'
-	// starts a new line). No spans = clear.
+	// The border around the picture (OPTIONS > BEZEL). The mode and the info
+	// are drawn in both buffers when they change (nId: the game, or anything
+	// that tells a new info apart); SetGameMode forgets them
+	struct TBezelInfo
+	{
+		const char *pTitle;			// "GOLDEN AXE"
+		const char *pMaker;			// "SEGA 1989"
+		const char *pButtons[6];		// buttons A..F, 0 after the last
+	};
+	virtual void SetBezel (unsigned nMode, const TBezelInfo *pInfo, unsigned nId) = 0;
+	// BEZEL_MENU: before a menu screen goes to the screen, its background
+	// (the UI's grid colours) becomes the dark pattern, faded near the panels,
+	// and the border of the back buffer follows it
+	virtual void BezelMenu (u32 *pUIBuf) = 0;
+
+	// Text beside the picture, '\n' starts a new line (a line too long for
+	// the column wraps at a space). Left column: lines right-aligned to the
+	// picture, the last one level with its bottom (status line, CONNECT A USB
+	// GAMEPAD); right column: left-aligned, the first one level with its top
+	// (messages). Where the columns are too narrow (a 4:3 display) the left
+	// column goes in the band below the picture and the right one in the band
+	// above, on one line. No spans = clear.
 	struct TTextSpan { const char *pText; u32 nColor; };	// colour: 0xRRGGBB
-	virtual void DrawBandText (boolean bTop, const TTextSpan *pSpans, unsigned nSpans) = 0;
-	virtual boolean HasSideColumns (void) const = 0;	// fixed by SetGameMode
 	virtual void DrawSideText (boolean bRight, const TTextSpan *pSpans, unsigned nSpans) = 0;
+	// the same: bTop = the right column (messages), else the left one
+	void DrawBandText (boolean bTop, const TTextSpan *pSpans, unsigned nSpans)
+	{
+		DrawSideText (bTop, pSpans, nSpans);
+	}
 
 	// for the log
 	virtual unsigned GetPixelOrder (void) const = 0;

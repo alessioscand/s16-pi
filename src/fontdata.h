@@ -12,6 +12,8 @@ extern "C" {
 
 extern const unsigned char g_MenuFont[96][8];
 extern const unsigned char g_ListFont[96][8];	// the game list (fontlist.c)
+extern const unsigned char g_InfoFont[96][8];	// around the game (fontinfo.c)
+extern const unsigned char g_InfoWidth[96];
 
 #ifdef __cplusplus
 }

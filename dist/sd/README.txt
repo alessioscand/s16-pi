@@ -13,6 +13,8 @@ s16-pi 1.0.0 - Bare-metal SEGA System 16 emulator for Raspberry Pi 3 and 4
   - Scanlines (light, medium, strong) and a COMPOSITE filter that looks
     like an old TV.
   - Up to 4 players, save state, the games' own DIP switches.
+  - Around the picture: the game's title, maker and year, and what its
+    buttons do (at 1080p). OPTIONS > BEZEL: INFO, or OFF for black.
   - Hiscores are saved in s16pi/saves/<game>.hi (57 sets, as MAME's
     hiscore plugin).
   - Each game's battery-kept RAM (settings, bookkeeping, and the scores
@@ -24,7 +26,7 @@ s16-pi 1.0.0 - Bare-metal SEGA System 16 emulator for Raspberry Pi 3 and 4
     moves the crosshair (blue, yellow and red for players 1, 2 and 3; it
     shows while the player is in the game), A fires, B is the bomb. The
     first time, the game asks for its gun adjustment: s16-pi does it by
-    itself in about 15 seconds (ADJUSTING THE GUNS), then keeps it in
+    itself in about 15 seconds (GUN ADJUST), then keeps it in
     saves/lghost.nv.
 
   System 18 boards run at 57.23 frames a second: here they run at the
