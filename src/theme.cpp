@@ -58,5 +58,11 @@ const TUITheme g_Theme =
 // the grid: petrol at 30%, a line every 16 pixels
 u32 ThemeGrid (int x, int y)
 {
-	return (x & 15) == 0 || (y & 15) == 0 ? 0x041F27 : 0x011921;
+	// lines every 16 game pixels, half a cell from the centre
+	return x % 16 == 8 || y % 16 == 8 ? 0x041F27 : 0x011921;
+}
+
+u32 ThemeGround (void)
+{
+	return 0x011921;
 }
