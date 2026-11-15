@@ -1,7 +1,7 @@
 /*
  * s16-pi - the game loop: pads to the control panels, one emulated frame per
  * screen frame (beam raced, or double buffered with a frame delay), the
- * in-game menu, the messages and the status line in the black bands
+ * in-game menu, the messages and the status line beside the picture
  */
 #include "kernel.h"
 #include "frame.h"
