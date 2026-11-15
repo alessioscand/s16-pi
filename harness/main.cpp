@@ -95,6 +95,7 @@ int main (int argc, char **argv)
 	int nFrames = 600, nEvery = 0, nCoin = -1;
 	bool bWav = false;
 	int nState = -1;
+	int nGuns = -1;		// Laser Ghost: frame where the gun adjustment script starts
 	std::string Out = ".";
 	for (int i = 3; i < argc; i++)
 	{
@@ -104,6 +105,7 @@ int main (int argc, char **argv)
 		else if (!strcmp (argv[i], "-coin") && i + 1 < argc)	nCoin = atoi (argv[++i]);
 		else if (!strcmp (argv[i], "-w"))			bWav = true;
 		else if (!strcmp (argv[i], "-state") && i + 1 < argc)	nState = atoi (argv[++i]);
+		else if (!strcmp (argv[i], "-guns") && i + 1 < argc)	nGuns = atoi (argv[++i]);
 	}
 	const int nGame = s16_find (pSet);
 	if (nGame < 0)
@@ -131,6 +133,27 @@ int main (int argc, char **argv)
 		if (nCoin >= 0 && f >= nCoin && f < nCoin + 8)			nSystem |= 0x10;
 		if (nCoin >= 0 && f >= nCoin + 60 && f < nCoin + 68)		nSystem |= 0x01;
 		s16_set_system (nSystem);
+		if (nGuns >= 0 && s16_guns ())
+		{
+			// the gun adjustment (from frame nGuns), then gun 1 sweeps and fires;
+			// the crosshairs are on
+			static int Aim[3][2] = {{160, 112}, {160, 112}, {160, 112}};
+			uint8_t Fire[3] = {0, 0, 0};
+			const bool bAdjust = f >= nGuns && s16_gun_adjust (f - nGuns, Fire);
+			if (!bAdjust)
+			{
+				const int u = f % 240;
+				Aim[0][0] = 20 + (u < 120 ? u : 240 - u) * 280 / 120;
+				Aim[0][1] = 120;
+				if (f % 8 < 4 && u < 120) Fire[0] = 0x10;
+			}
+			for (int g = 0; g < 3; g++)
+			{
+				if (!bAdjust) s16_set_aim (g, Aim[g][0], Aim[g][1]);
+				s16_set_crosshair (g, bAdjust || s16_gun_in_play (g));
+				s16_set_player (g, Fire[g]);
+			}
+		}
 		if (nState > 0 && f == nState)			// save, run on, load: the run must go on the same
 		{
 			const size_t nSize = s16_state_size ();

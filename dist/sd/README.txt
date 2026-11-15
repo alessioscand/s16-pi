@@ -1,4 +1,4 @@
-s16-pi 0.3.1 - Bare-metal SEGA System 16 emulator for Raspberry Pi 3 and 4
+s16-pi 0.3.2 - Bare-metal SEGA System 16 emulator for Raspberry Pi 3 and 4
 ============================================================================
 
 WORK IN PROGRESS
@@ -7,9 +7,21 @@ WORK IN PROGRESS
   play with a stick and buttons on a horizontal screen (Altered Beast,
   Golden Axe, Shinobi, Alien Syndrome, Aurail, Wonder Boy III, ESWAT,
   Cotton ... and on System 18 Shadow Dancer, Moonwalker, Alien Storm,
-  D. D. Crew, Bloxeed, Clutch Hitter), 77 MAME sets, protected ones
-  included. Picture, sound, save state, DIP switches and the menus are
-  there. Vertical games and hiscores are not yet.
+  D. D. Crew, Bloxeed, Clutch Hitter, Laser Ghost), 80 MAME sets,
+  protected ones included. Picture, sound, save state, DIP switches and
+  the menus are there. Vertical games and hiscores are not yet.
+
+  Each game's battery-kept RAM (settings, bookkeeping, and the scores of
+  the games that keep them there) is saved in s16pi/saves/<game>.nv, as
+  on the real boards: credits left in a game are still there next time.
+  Delete the .nv file to start a game afresh.
+
+  Laser Ghost is played with the pads instead of its 3 guns: the stick
+  moves the crosshair (blue, yellow and red for players 1, 2 and 3; it
+  shows while the player is in the game), A fires, B is the bomb. The
+  first time, the game asks for its gun adjustment: s16-pi does it by
+  itself in about 15 seconds (ADJUSTING THE GUNS), then keeps it in
+  saves/lghost.nv.
 
   System 18 boards run at 57.23 frames a second: here they run at the
   screen's 60, a little faster (music a little higher) than the real

@@ -63,7 +63,13 @@ static struct TMachine
 	u8 IoLatch[8], nIoDir, nIoCnt;	// the 315-5296
 	bool bSoundNmi;			// the mapper's line to the Z80's NMI
 	u32 nMainLineDone;		// 68000 cycles run in this line (the VDP's H counter)
+	// Laser Ghost: the guns' positions (from the front-end) and the MSM6253 A/D
+	u8 GunX[3], GunY[3];		// 0-255, left to right and top to bottom
+	u8 nAdcShift;			// the converted value, shifted out a bit at a time
+	u8 nAdcSelect;			// channels 2 and 3: gun 2 (0) or gun 3 (1)
+	u8 nRecoil;			// the guns' recoil solenoids now on (bits 0-2)
 } M;
+static unsigned s_nRecoils[3];		// times each recoil came on
 static TS16Video V;
 static z80 s_Z80;
 static i8751_cpu s_Mcu;
@@ -468,6 +474,14 @@ static void IoWrite (u32 nOffset, u16 nData)
 
 static void IoPortOut18 (int nPort, u8 d)
 {
+	if (nPort == 2 && s_pGame->bGuns)	// Laser Ghost: the guns' recoil solenoids, active low
+	{
+		for (int g = 0; g < 3; g++)
+		{
+			if ((M.nRecoil & (1 << g)) == 0 && (~d & (1 << g))) s_nRecoils[g]++;
+		}
+		M.nRecoil = (u8) (~d & 7);
+	}
 	if (nPort == 7 && s_pGame->nBoard != BOARD_S18_5987)
 	{
 		VideoSync ();
@@ -549,6 +563,182 @@ static void IoChipWrite (unsigned nReg, u8 d)
 	}
 }
 
+// Laser Ghost (MAME's lghost_custom_io_r/w): writing 0x3010-0x3016 loads the
+// converter's channel (offset & 3) into its shift register, reading shifts it
+// out MSB first on D7. Channel 0 and 1: gun 1, Y (bottom = 0) and X; 2 and 3:
+// the same for gun 2 or gun 3, as chosen by bit 0 of 0x3020.
+static u8 AdcChannel (unsigned n)
+{
+	const unsigned g = n < 2 ? 0 : (M.nAdcSelect ? 2 : 1);
+	return (n & 1) ? M.GunX[g] : (u8) (255 - M.GunY[g]);
+}
+
+// ---- Laser Ghost: aiming, crosshairs, the gun adjustment ----------------------
+
+// The game's GUN ADJUSTMENT takes, for each gun, the converter's values at two
+// flash points centred on pixels (7.5, 7.5) and (311.5, 215.5), and reads the
+// guns along that line from then on. s16_gun_adjust aims exactly there, so a
+// gun aimed at pixel x, y gives the values below and hits that pixel.
+static u8 AimToGun (int n, int nTo)		// nTo: 304 (X) or 208 (Y)
+{
+	const int g = 5 + ((2 * n - 14) * 245 + nTo) / (2 * nTo);	// (n - 7) * 245 / nTo, rounded
+	return (u8) (g < 0 ? 0 : g > 255 ? 255 : g);
+}
+
+#include "s16_guns.inc"
+
+// the shot's offset for an aim, interpolated in s_GunError (pixels x 16)
+static void GunError (int g, int x, int y, int *pDx, int *pDy)
+{
+#ifdef GUN_RAW				// harness/gunmap.cpp measures without the correction
+	*pDx = *pDy = 0; (void) g; (void) x; (void) y; return;
+#endif
+	int fx = (x - 10) * 16 / 20, fy = (y - 10) * 16 / 17;	// grid units x 16
+	fx = fx < 0 ? 0 : fx > 15 * 16 ? 15 * 16 : fx;
+	fy = fy < 0 ? 0 : fy > 12 * 16 ? 12 * 16 : fy;
+	const int cx = fx >> 4 < 15 ? fx >> 4 : 14, cy = fy >> 4 < 12 ? fy >> 4 : 11;
+	const int ux = fx - cx * 16, uy = fy - cy * 16;
+	for (int k = 0; k < 2; k++)
+	{
+		const int a = s_GunError[g][cy][cx][k], b = s_GunError[g][cy][cx + 1][k];
+		const int c = s_GunError[g][cy + 1][cx][k], d = s_GunError[g][cy + 1][cx + 1][k];
+		const int v = ((a * (16 - ux) + b * ux) * (16 - uy) + (c * (16 - ux) + d * ux) * uy) / 16;
+		*(k ? pDy : pDx) = v;			// x 16
+	}
+}
+
+struct TCross { s16 x, y; bool bOn; };
+static TCross s_Cross[3], s_CrossNow[3];	// set by the front-end; latched at line 0
+
+// a straight aim, as during the adjustment
+static void AimStraight (int p, int x, int y)
+{
+	M.GunX[p] = AimToGun (x, 304);
+	M.GunY[p] = AimToGun (y, 208);
+	s_Cross[p].x = (s16) x;
+	s_Cross[p].y = (s16) y;
+}
+
+void s16_set_aim (int p, int x, int y)
+{
+	if (p < 0 || p >= 3) return;
+	x = x < 0 ? 0 : x > S16_WIDTH - 1 ? S16_WIDTH - 1 : x;
+	y = y < 0 ? 0 : y > S16_HEIGHT - 1 ? S16_HEIGHT - 1 : y;
+	// aim where the shot lands on x, y: a = (x, y) - error (a), a few rounds
+	int ax = x * 16, ay = y * 16;
+	for (int i = 0; i < 4; i++)
+	{
+		int dx, dy;
+		GunError (p, ax >> 4, ay >> 4, &dx, &dy);
+		ax = x * 16 - dx;
+		ay = y * 16 - dy;
+	}
+	M.GunX[p] = AimToGun ((ax + 8) >> 4, 304);
+	M.GunY[p] = AimToGun ((ay + 8) >> 4, 208);
+	s_Cross[p].x = (s16) x;
+	s_Cross[p].y = (s16) y;
+}
+void s16_set_crosshair (int p, int bOn)	{ if (p >= 0 && p < 3) s_Cross[p].bOn = bOn != 0; }
+
+// four corners 3 pixels thick (a white line along their middle), 25 pixels
+// across, square, and a small white cross on the aimed pixel; outlined in black
+enum { CROSS_R = 14 };
+static u8 s_CrossShape[2 * CROSS_R + 1][2 * CROSS_R + 1];	// 0 none, 1 black, 2 colour, 3 white
+static void CrossShapeInit (void)
+{
+	if (s_CrossShape[CROSS_R][CROSS_R]) return;
+	enum { C = CROSS_R, R = 12, L = 7 };
+	u8 Pix[2 * C + 1][2 * C + 1] = {};
+	for (int sx = -1; sx <= 1; sx += 2)
+	{
+		for (int sy = -1; sy <= 1; sy += 2)
+		{
+			for (int k = -1; k < L; k++)		// from -1: the outer corner is filled
+			{
+				for (int t = -1; t <= 1; t++)
+				{
+					Pix[C + sy * (R - k)][C + sx * (R + t)] = 2;	// the upright arm
+					Pix[C + sy * (R + t)][C + sx * (R - k)] = 2;	// the level arm
+				}
+			}
+			for (int k = 0; k < L; k++)
+			{
+				Pix[C + sy * (R - k)][C + sx * R] = 3;
+				Pix[C + sy * R][C + sx * (R - k)] = 3;
+			}
+		}
+	}
+	for (int k = -2; k <= 2; k++)
+	{
+		Pix[C][C + k] = Pix[C + k][C] = 3;
+	}
+	for (int y = 0; y <= 2 * C; y++)
+		for (int x = 0; x <= 2 * C; x++)
+		{
+			u8 v = Pix[y][x];
+			if (!v)
+			{
+				for (int dy = -1; dy <= 1 && !v; dy++)
+					for (int dx = -1; dx <= 1 && !v; dx++)
+					{
+						const int yy = y + dy, xx = x + dx;
+						if (yy >= 0 && yy <= 2 * C && xx >= 0 && xx <= 2 * C && Pix[yy][xx]) v = 1;
+					}
+			}
+			s_CrossShape[y][x] = v;
+		}
+}
+
+static void CrossLine (int y, u32 *pOut)
+{
+	static const u32 Colour[3] = {0x3C8CFF, 0xFFD700, 0xFF3C46};	// the game's blue, yellow and red
+	for (int p = 0; p < 3; p++)
+	{
+		const TCross &C = s_CrossNow[p];
+		const int r = y - C.y + CROSS_R;
+		if (!C.bOn || r < 0 || r > 2 * CROSS_R) continue;
+		for (int c = 0; c <= 2 * CROSS_R; c++)
+		{
+			const int x = C.x - CROSS_R + c;
+			const u8 v = s_CrossShape[r][c];
+			if (!v || x < 0 || x >= S16_WIDTH) continue;
+			pOut[x] = v == 1 ? 0 : v == 2 ? Colour[p] : 0xFFFFFF;
+		}
+	}
+}
+
+// The adjustment the game asks for while its RAM is blank, done for the
+// player: for each gun, the trigger to start, then the flash points; then
+// both bombs to leave. t: frames since the game started. It aims the guns
+// itself, straight (s16_set_aim's correction is for after it); the front-end
+// passes on the trigger bits. Returns 0 when done.
+int s16_gun_adjust (int t, uint8_t Fire[3])
+{
+	enum { START = 360, STEP = 45, PRESS = 25 };	// START: after GUN ADJUST ERROR goes by itself
+	memset (Fire, 0, 3);
+	const int u = t - START, nStep = u / STEP, nPhase = u % STEP;
+	if (u < 0) return 1;
+	if (nStep < 12)
+	{
+		const int g = nStep / 4, k = nStep % 4;	// 0: start, 1: top left, 2: bottom right, 3: wait
+		AimStraight (g, k == 2 ? 311 : 7, k == 2 ? 215 : 7);
+		if (k != 3 && nPhase >= PRESS && nPhase < PRESS + 6) Fire[g] = 0x10;
+		return 1;
+	}
+	if (nStep == 12)
+	{
+		if (nPhase >= PRESS && nPhase < PRESS + 6) Fire[0] = Fire[1] = Fire[2] = 0x20;
+		return 1;
+	}
+	return 0;
+}
+
+// The work RAM, which a battery keeps on the System 16B and 18 boards (MAME
+// saves it as the NVRAM of all of them): settings, bookkeeping, the hiscores
+// of the games that keep them there, Laser Ghost's gun adjustment
+size_t s16_nvram_size (void)	{ return s_bLoaded ? sizeof M.WorkRam : 0; }
+uint8_t *s16_nvram (void)	{ return M.WorkRam; }
+
 static u16 IoRead18 (u32 nOffset)
 {
 	nOffset &= 0x1fff;
@@ -563,6 +753,12 @@ static u16 IoRead18 (u32 nOffset)
 	{
 		return InputPort (4 + (nOffset & 3));
 	}
+	if (s_pGame->bGuns && nOffset >= 0x3010 / 2 && nOffset <= 0x3016 / 2)
+	{
+		const u8 b = M.nAdcShift & 0x80;
+		M.nAdcShift <<= 1;
+		return (u16) ((OpenBus () & 0xff00) | b | 0x7f);
+	}
 	return OpenBus ();
 }
 
@@ -571,6 +767,16 @@ static void IoWrite18 (u32 nOffset, u16 d, u16 nMask)
 	nOffset &= 0x1fff;
 	if (!(nMask & 0x00ff))
 	{
+		return;
+	}
+	if (s_pGame->bGuns && nOffset >= 0x3010 / 2 && nOffset <= 0x3016 / 2)
+	{
+		M.nAdcShift = AdcChannel (nOffset & 3);
+		return;
+	}
+	if (s_pGame->bGuns && nOffset == 0x3020 / 2)
+	{
+		M.nAdcSelect = d & 1;
 		return;
 	}
 	switch (nOffset & (0x3000 / 2))
@@ -1091,7 +1297,7 @@ static void SoundHooks (void)
 
 static void Reset (void)
 {
-	memset (&M.WorkRam, 0, sizeof M.WorkRam);
+	// the work RAM is kept by the battery over a reset (see s16_nvram)
 	memset (&M.SoundRam, 0, sizeof M.SoundRam);
 	memset (M.Mapper, 0, sizeof M.Mapper);
 	M.nToSound = M.nFromSound = 0;
@@ -1202,6 +1408,8 @@ int s16_load (int nGame, TS16Fetch *pFetch, void *pCtx, char *pMissing, size_t n
 			s_bS18 ? 0x400 : 0x1000, s_bS18);
 	memset (&M, 0, sizeof M);
 	M.nDsw = pGame->pInputs->nDswDefault;
+	memset (M.GunX, 128, sizeof M.GunX);
+	memset (M.GunY, 128, sizeof M.GunY);
 
 	m68k_init ();
 	m68k_set_cpu_type (M68K_CPU_TYPE_68000);
@@ -1225,6 +1433,9 @@ int s16_load (int nGame, TS16Fetch *pFetch, void *pCtx, char *pMissing, size_t n
 		s_Mcu.init (s_pRegion[RGN_MCU], pGame->RegionSize[RGN_MCU], Bus);
 	}
 	s_bLoaded = true;
+	CrossShapeInit ();
+	memset (s_Cross, 0, sizeof s_Cross);
+	memset (s_CrossNow, 0, sizeof s_CrossNow);
 	Reset ();
 	return 1;
 }
@@ -1355,6 +1566,7 @@ void s16_run_frame (void)
 		}
 		else if (nLine == 0)
 		{
+			memcpy (s_CrossNow, s_Cross, sizeof s_CrossNow);
 			if ((s_pGame->nMcu == MCU_8751))	s_Mcu.set_int (0, false);
 			if (s_bS18)			s18_vdp_frame (&V.Vdp);
 		}
@@ -1369,6 +1581,7 @@ void s16_run_frame (void)
 			{
 				u32 Line[S16_WIDTH];
 				s16_video_line (&V, nLine, Line);
+				CrossLine (nLine, Line);
 				s_pLineCB (s_pLineCtx, nLine, Line);
 			}
 		}
@@ -1382,6 +1595,7 @@ void s16_run_frame (void)
 void s16_render_line (const TS16LineRegs *, int y, u32 *pOut)
 {
 	s16_video_line (&V, y, pOut);
+	CrossLine (y, pOut);
 }
 
 // ---- the rest of the interface -----------------------------------------------
@@ -1451,6 +1665,19 @@ u16 s16_dsw_default (int n)			{ return Game (n) ? Game (n)->pInputs->nDswDefault
 
 void s16_set_player (int p, u8 nBits)		{ if (p >= 0 && p < 4) M.Player[p] = nBits; }
 void s16_set_system (u8 nBits)			{ M.nSystem = nBits; }
+int s16_guns (void)				{ return s_pGame && s_pGame->bGuns ? 3 : 0; }
+unsigned s16_gun_recoils (int p)		{ return p >= 0 && p < 3 ? s_nRecoils[p] : 0; }
+
+// Laser Ghost keeps a block of 0x80 bytes of work RAM per player from 0x460
+// (as stored here); its first byte has bits 7 and 6 both set while the player
+// is in the game, and not in attract mode, before joining, at the continue or
+// after the game over. Found by comparing the RAM with when the game drives
+// the guns' recoil (only for shots in play), in 1, 2 and 3 player games.
+int s16_gun_in_play (int p)
+{
+	if (!s_pGame || !s_pGame->bGuns || p < 0 || p >= 3) return 0;
+	return (M.WorkRam[0x460 + 0x80 * p] & 0xC0) == 0xC0;
+}
 void s16_set_dsw (u16 nDsw)			{ M.nDsw = nDsw; }
 
 void s16_set_line_callback (TS16LineCB *pCB, void *pCtx)	{ s_pLineCB = pCB; s_pLineCtx = pCtx; }
@@ -1532,6 +1759,9 @@ int s16_state_load (const void *pBuffer, size_t nSize)
 	const u8 Player[4] = {M.Player[0], M.Player[1], M.Player[2], M.Player[3]};
 	const u8 nSystem = M.nSystem;
 	const u16 nDsw = M.nDsw;
+	u8 Gun[6];
+	memcpy (Gun, M.GunX, 3);
+	memcpy (Gun + 3, M.GunY, 3);
 	memcpy (&M, p, sizeof M);				p += sizeof M;
 	memcpy (&V, p, sizeof V);				p += sizeof V;
 	s16_m68k_state_load (p);				p += s16_m68k_state_size ();
@@ -1545,6 +1775,8 @@ int s16_state_load (const void *pBuffer, size_t nSize)
 	// what belongs to now, not to the state: the Z80's hooks, pads and switches
 	SoundHooks ();
 	memcpy (M.Player, Player, sizeof Player);
+	memcpy (M.GunX, Gun, 3);
+	memcpy (M.GunY, Gun + 3, 3);
 	M.nSystem = nSystem;
 	M.nDsw = nDsw;
 	UpdateMapping ();
