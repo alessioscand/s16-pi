@@ -92,18 +92,19 @@ void CKernel::ApplyVideoMode (void)
 	Log (Line, COLOR_TEXT);
 }
 
-// the border around the picture: black (BEZEL OFF), or the pattern with the
-// loaded game's title, maker, year and buttons, or under the menus
+// the border around the picture: with no game loaded always the menus'
+// grid; with a game, black (BEZEL OFF) or the grid with the game's title,
+// maker, year and buttons
 void CKernel::UpdateBezel (void)
 {
-	if (!m_bBezel)
-	{
-		m_Video.SetBezel (BEZEL_BLACK, 0, 0);
-		return;
-	}
 	if (m_nLoaded < 0)
 	{
 		m_Video.SetBezel (BEZEL_MENU, 0, 0);
+		return;
+	}
+	if (!m_bBezel)
+	{
+		m_Video.SetBezel (BEZEL_BLACK, 0, 0);
 		return;
 	}
 	static char Title[64], Maker[64];

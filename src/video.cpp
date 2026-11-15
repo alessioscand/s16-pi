@@ -3,6 +3,7 @@
  */
 #include "fontdata.h"
 #include "video.h"
+#include "ui.h"
 #include "fbmap.h"
 #include <circle/bcmpropertytags.h>
 #include <circle/font.h>
@@ -13,16 +14,8 @@
 
 #define MAX_LINE	(GAME_W * 8)		// longest scaled line we support
 
-// the border: the UI's grid (ui.h) at 30%, a line every 16 UI pixels, lined
-// up with the menus' own grid; the lines fade out near the picture (72 screen
-// pixels) and, under the menus, near the panels and the text (18 UI pixels)
-#define BG_BASE		0x05566Fu		// UI_BG
-#define BG_LINE		0x0E6882u		// UI_GRID
-#define BG_DIM		30			// %
-#define BG_CELL		16
-#define FADE_SCREEN	72
-#define FADE_UI		18
-#define CANVAS_MAX	(800 * 450)		// cells: up to 4K at 4x... and 1080p at 2x
+// the border: the menus' grid (ui.h), a line every UI_CELL UI pixels, lined
+// up with the menus' own
 
 // the text: Area51 at 2 screen pixels per font pixel
 #define TEXT_H		7			// font pixels: capitals and digits
@@ -31,6 +24,7 @@
 #define INFO_GREY	0x808A8Fu
 #define SIDE_LINES	8
 #define SIDE_CHARS	48
+#define BLOCK_H		(SIDE_LINES * TEXT_PITCH * 2 + 4)	// a column's text, 2x
 
 CVideoOut::CVideoOut (void)
 :	m_pFrameBuffer (0),
@@ -61,11 +55,7 @@ CVideoOut::CVideoOut (void)
 	m_bBezelDrawn (FALSE),
 	m_nBgBase (0xFF000000u),
 	m_nBgLine (0xFF000000u),
-	m_pDist (0),
-	m_nCW (0),
-	m_nCH (0),
-	m_nOX (0),
-	m_nOY (0),
+	m_pBlock (0),
 	m_pLine (0),
 	m_pDark (0),
 
@@ -75,7 +65,7 @@ CVideoOut::CVideoOut (void)
 {
 	memset (&m_Info, 0, sizeof m_Info);
 	memset (m_Text, 0, sizeof m_Text);
-	m_nMenuSum[0] = m_nMenuSum[1] = 0;
+	memset (m_nTextSum, 0, sizeof m_nTextSum);
 }
 
 CVideoOut::~CVideoOut (void)
@@ -83,7 +73,7 @@ CVideoOut::~CVideoOut (void)
 	delete m_pFrameBuffer;
 	delete [] m_pLine;
 	delete [] m_pDark;
-	delete [] m_pDist;
+	delete [] m_pBlock;
 }
 
 boolean CVideoOut::Allocate (unsigned nWidth, unsigned nHeight)
@@ -154,8 +144,8 @@ boolean CVideoOut::Initialize (void)
 
 	m_pLine = new u32[MAX_LINE];
 	m_pDark = new u32[MAX_LINE];
-	m_pDist = new u8[CANVAS_MAX];
-	if (m_pLine == 0 || m_pDark == 0 || m_pDist == 0)
+	m_pBlock = new u32[m_nDispW * BLOCK_H];
+	if (m_pLine == 0 || m_pDark == 0 || m_pBlock == 0)
 	{
 		return FALSE;
 	}
@@ -169,6 +159,7 @@ boolean CVideoOut::SetConsoleMode (void)
 	m_bSide = FALSE;
 	m_bBezelDrawn = FALSE;
 	memset (m_Text, 0, sizeof m_Text);
+	memset (m_nTextSum, 0, sizeof m_nTextSum);
 	m_nTextScale = m_nDispH >= 900 ? 2 : 1;
 	return Allocate (m_nDispW, m_nDispH);
 }
@@ -237,34 +228,12 @@ boolean CVideoOut::SetGameMode (unsigned nFilter, boolean bAllowHVS)
 	m_nColBot = m_nGameY + nGameH;
 	if (m_nColBot > m_nHeight - m_nGap) m_nColBot = m_nHeight - m_nGap;
 
-	// the border's colours and fade
-	auto Dim = [this] (u32 c)
-	{
-		u32 r = ((c >> 16) & 0xFF) * BG_DIM / 100, g = ((c >> 8) & 0xFF) * BG_DIM / 100,
-		    b = (c & 0xFF) * BG_DIM / 100;
-		return Native (RGB (r, g, b));
-	};
-	m_nBgBase = Dim (BG_BASE);
-	m_nBgLine = Dim (BG_LINE);
-	for (unsigned i = 0; i < 256; i++)		// smoothstep: i = distance / reach * 255
-	{
-		unsigned t = i;
-		m_Fade[i] = (u8) (t * t * (3 * 255 - 2 * t) / (255 * 255));
-	}
+	// the border's colours
+	m_nBgBase = Native (RGB ((UI_BG >> 16) & 0xFF, (UI_BG >> 8) & 0xFF, UI_BG & 0xFF));
+	m_nBgLine = Native (RGB ((UI_GRID >> 16) & 0xFF, (UI_GRID >> 8) & 0xFF, UI_GRID & 0xFF));
 	m_bBezelDrawn = FALSE;			// Allocate cleared both buffers
 	memset (m_Text, 0, sizeof m_Text);
-	m_nMenuSum[0] = m_nMenuSum[1] = 0;
-
-	// BEZEL_MENU canvas: the screen in UI pixels, the menu's top left corner
-	// on a whole cell
-	m_nOX = (m_nGameX + m_nM - 1) / m_nM;
-	m_nOY = (m_nGameY + m_nM - 1) / m_nM;
-	m_nCW = m_nOX + GAME_W + (m_nWidth - m_nGameX - nGameW + m_nM - 1) / m_nM;
-	m_nCH = m_nOY + GAME_H + (m_nHeight - m_nGameY - nGameH + m_nM - 1) / m_nM;
-	if (m_nCW * m_nCH > CANVAS_MAX)
-	{
-		m_nCW = m_nCH = 0;			// no fade near the panels
-	}
+	memset (m_nTextSum, 0, sizeof m_nTextSum);
 
 	m_bGameMode = TRUE;
 	return TRUE;
@@ -356,15 +325,16 @@ void CVideoOut::DrawText (unsigned nBuffer, unsigned nCol, unsigned nRow, const 
 	}
 }
 
-void CVideoOut::DrawGame (const u32 *pSource)
+void CVideoOut::DrawGame (const u32 *pSource, boolean bFilter)
 {
 	for (unsigned y = 0; y < GAME_H; y++)
 	{
-		DrawGameLineTo (m_nBack, pSource, y, m_pLine, m_pDark);
+		DrawGameLineTo (m_nBack, pSource, y, m_pLine, m_pDark, bFilter);
 	}
 }
 
-void CVideoOut::DrawGameLineTo (unsigned nBuffer, const u32 *pSource, unsigned y, u32 *pLine, u32 *pDark)
+void CVideoOut::DrawGameLineTo (unsigned nBuffer, const u32 *pSource, unsigned y, u32 *pLine, u32 *pDark,
+				boolean bFilter)
 {
 	const unsigned M = m_nM;
 	const unsigned nGameW = GAME_W * M;
@@ -372,7 +342,7 @@ void CVideoOut::DrawGameLineTo (unsigned nBuffer, const u32 *pSource, unsigned y
 	// scanlines: bottom rows of each group darker (2 of 4 at 4x, 1 of 2 or 3)
 	// (COMPOSITE: none; the game lines come through DrawNtscLine, this draws
 	// the menus over the paused game)
-	const unsigned nDarkRows = m_nFilter != FILTER_NONE && m_nFilter != FILTER_COMPOSITE
+	const unsigned nDarkRows = bFilter && m_nFilter != FILTER_NONE && m_nFilter != FILTER_COMPOSITE
 				   ? (M >= 4 ? M / 2 : (M >= 2 ? 1 : 0)) : 0;
 
 	// expand one source line horizontally into cached memory, converting
@@ -477,102 +447,31 @@ void CVideoOut::DrawNtscLine (unsigned y, const u32 *pNtsc, unsigned nNtscW, u32
 
 // ---------------------------------------------------------------- the border
 
-static unsigned ISqrt (unsigned n)
-{
-	unsigned r = 0, b = 1u << 14;		// n < 2^28
-	while (b > n) b >>= 2;
-	while (b)
-	{
-		if (n >= r + b)
-		{
-			n -= r + b;
-			r = (r >> 1) + b;
-		}
-		else
-		{
-			r >>= 1;
-		}
-		b >>= 2;
-	}
-	return r;
-}
-
-// a pixel of the border: the grid line colour faded towards the base by
-// v / 255 (255 = the line as it is)
-static u32 MixLine (u32 nBase, u32 nLine, unsigned v)
-{
-	u32 c = 0xFF000000u;
-	for (unsigned s = 0; s < 24; s += 8)
-	{
-		u32 a = (nBase >> s) & 0xFF, b = (nLine >> s) & 0xFF;
-		c |= ((a * (255 - v) + b * v) / 255) << s;
-	}
-	return c;
-}
-
 u32 CVideoOut::BgPixel (unsigned x, unsigned y) const
 {
 	if (m_nBezel == BEZEL_BLACK)
 	{
 		return 0xFF000000u;
 	}
-	const int M = (int) m_nM, nCell = BG_CELL * M;
-	const int dx = (int) x - (int) m_nGameX, dy = (int) y - (int) m_nGameY;
-	int mx = dx % nCell, my = dy % nCell;
+	const int M = (int) m_nM, nCell = UI_CELL * M;
+	int mx = ((int) x - (int) m_nGameX) % nCell, my = ((int) y - (int) m_nGameY) % nCell;
 	if (mx < 0) mx += nCell;
 	if (my < 0) my += nCell;
-	if (mx >= M && my >= M)
-	{
-		return m_nBgBase;			// inside a cell: the fade does not show
-	}
-
-	unsigned v = 255;
-	if (m_nBezel == BEZEL_MENU)
-	{
-		if (m_nCW)
-		{
-			int cx = (dx >= 0 ? dx / M : -((-dx + M - 1) / M)) + (int) m_nOX;
-			int cy = (dy >= 0 ? dy / M : -((-dy + M - 1) / M)) + (int) m_nOY;
-			if (cx < 0) cx = 0;
-			if (cy < 0) cy = 0;
-			if (cx >= (int) m_nCW) cx = (int) m_nCW - 1;
-			if (cy >= (int) m_nCH) cy = (int) m_nCH - 1;
-			v = m_Fade[m_pDist[cy * (int) m_nCW + cx] * 255 / (3 * FADE_UI)];
-		}
-	}
-	else
-	{
-		// distance from the picture, in framebuffer pixels
-		const int nW = GAME_W * M, nH = GAME_H * M;
-		const unsigned ex = dx < 0 ? (unsigned) -dx : (dx >= nW ? (unsigned) (dx - nW + 1) : 0);
-		const unsigned ey = dy < 0 ? (unsigned) -dy : (dy >= nH ? (unsigned) (dy - nH + 1) : 0);
-		const unsigned R = FADE_SCREEN / m_nK;
-		if (ex < R && ey < R)
-		{
-			unsigned d2 = ex * ex + ey * ey;
-			if (d2 < R * R)
-			{
-				v = m_Fade[ISqrt (d2) * 255 / R];
-			}
-		}
-	}
-	return v >= 255 ? m_nBgLine : MixLine (m_nBgBase, m_nBgLine, v);
+	return mx < M || my < M ? m_nBgLine : m_nBgBase;
 }
 
-// the border inside a rectangle (never the picture)
-void CVideoOut::BgRect (unsigned nBuf, unsigned x0, unsigned y0, unsigned x1, unsigned y1)
+// the whole border of a buffer (never the picture), then the game's info
+void CVideoOut::FillBorder (unsigned nBuf)
 {
-	if (x1 > m_nWidth) x1 = m_nWidth;
-	if (y1 > m_nHeight) y1 = m_nHeight;
 	const unsigned gx0 = m_nGameX, gx1 = m_nGameX + GAME_W * m_nM;
 	const unsigned gy0 = m_nGameY, gy1 = m_nGameY + GAME_H * m_nM;
-	for (unsigned y = y0; y < y1; y++)
+	for (unsigned y = 0; y < m_nHeight; y++)
 	{
 		u32 *p = Row (nBuf, y);
 		const boolean bGameRow = y >= gy0 && y < gy1;
-		for (unsigned x = x0; x < x1; x++)
+		for (unsigned x = 0; x < m_nWidth; x++)
 		{
-			if (bGameRow && x >= gx0 && x < gx1)
+			if (bGameRow && x == gx0)
 			{
 				x = gx1 - 1;
 				continue;
@@ -580,12 +479,8 @@ void CVideoOut::BgRect (unsigned nBuf, unsigned x0, unsigned y0, unsigned x1, un
 			p[x] = BgPixel (x, y);
 		}
 	}
-}
-
-void CVideoOut::FillBorder (unsigned nBuf)
-{
-	BgRect (nBuf, 0, 0, m_nWidth, m_nHeight);
 	m_Text[nBuf][0].x1 = m_Text[nBuf][1].x1 = 0;
+	m_nTextSum[nBuf][0] = m_nTextSum[nBuf][1] = 0;
 	if (m_nBezel == BEZEL_GAME && m_bBands)
 	{
 		DrawInfoLines (nBuf);
@@ -609,138 +504,9 @@ void CVideoOut::SetBezel (unsigned nMode, const TBezelInfo *pInfo, unsigned nId)
 	{
 		memset (&m_Info, 0, sizeof m_Info);
 	}
-	if (m_nCW)
-	{
-		memset (m_pDist, 3 * FADE_UI, m_nCW * m_nCH);	// no menu yet: no fade
-	}
-	m_nMenuSum[0] = m_nMenuSum[1] = 0;
 	FillBorder (0);
 	FillBorder (1);
 	m_bBezelDrawn = TRUE;
-}
-
-void CVideoOut::BezelMenu (u32 *pUIBuf)
-{
-	if (!m_bGameMode || m_nBezel != BEZEL_MENU || m_nCW == 0)
-	{
-		return;
-	}
-	const unsigned W = m_nCW, H = m_nCH, R3 = 3 * FADE_UI;
-	u8 *D = m_pDist;
-
-	// the pattern (UI colours: R high)
-	auto DimRH = [] (u32 c)
-	{
-		return ((((c >> 16) & 0xFF) * BG_DIM / 100) << 16)
-		       | ((((c >> 8) & 0xFF) * BG_DIM / 100) << 8) | ((c & 0xFF) * BG_DIM / 100);
-	};
-	const u32 nBase = 0xFF000000u | DimRH (BG_BASE), nLine = 0xFF000000u | DimRH (BG_LINE);
-	// background: the grid's two colours, or the pattern (a box drawn over
-	// a screen that already went through here)
-	auto IsBg = [nBase, nLine] (u32 c)
-	{
-		c &= 0xFFFFFFu;
-		return c == BG_BASE || c == BG_LINE || c == (nBase & 0xFFFFFFu) || c == (nLine & 0xFFFFFFu);
-	};
-
-	// 0 on the menu's own pixels
-	memset (D, R3, W * H);
-	for (unsigned y = 0; y < GAME_H; y++)
-	{
-		const u32 *p = pUIBuf + (GAME_SRC_Y + y) * GAME_SRC_PITCH + GAME_SRC_X;
-		u8 *d = D + (m_nOY + y) * W + m_nOX;
-		for (unsigned x = 0; x < GAME_W; x++)
-		{
-			if (!IsBg (p[x]))
-			{
-				d[x] = 0;
-			}
-		}
-	}
-
-	// chamfer distance, two passes (3 = a side, 4 = a diagonal), capped at R3
-	for (unsigned y = 0; y < H; y++)
-	{
-		u8 *d = D + y * W;
-		for (unsigned x = 0; x < W; x++)
-		{
-			unsigned v = d[x];
-			if (v == 0) continue;
-			if (x > 0 && d[x - 1] + 3u < v) v = d[x - 1] + 3u;
-			if (y > 0)
-			{
-				const u8 *u = d - W;
-				if (u[x] + 3u < v) v = u[x] + 3u;
-				if (x > 0 && u[x - 1] + 4u < v) v = u[x - 1] + 4u;
-				if (x + 1 < W && u[x + 1] + 4u < v) v = u[x + 1] + 4u;
-			}
-			d[x] = (u8) v;
-		}
-	}
-	for (int y = (int) H - 1; y >= 0; y--)
-	{
-		u8 *d = D + y * W;
-		for (int x = (int) W - 1; x >= 0; x--)
-		{
-			unsigned v = d[x];
-			if (v == 0) continue;
-			if (x + 1 < (int) W && d[x + 1] + 3u < v) v = d[x + 1] + 3u;
-			if (y + 1 < (int) H)
-			{
-				const u8 *u = d + W;
-				if (u[x] + 3u < v) v = u[x] + 3u;
-				if (x > 0 && u[x - 1] + 4u < v) v = u[x - 1] + 4u;
-				if (x + 1 < (int) W && u[x + 1] + 4u < v) v = u[x + 1] + 4u;
-			}
-			d[x] = (u8) v;
-		}
-	}
-
-	// the menu's background becomes the border's pattern
-	for (unsigned y = 0; y < GAME_H; y++)
-	{
-		u32 *p = pUIBuf + (GAME_SRC_Y + y) * GAME_SRC_PITCH + GAME_SRC_X;
-		const u8 *d = D + (m_nOY + y) * W + m_nOX;
-		const boolean bLineRow = y % BG_CELL == 0;
-		for (unsigned x = 0; x < GAME_W; x++)
-		{
-			if (!IsBg (p[x]))
-			{
-				continue;
-			}
-			if (!bLineRow && x % BG_CELL != 0)
-			{
-				p[x] = nBase;
-				continue;
-			}
-			unsigned v = m_Fade[d[x] * 255 / R3];
-			p[x] = v >= 255 ? nLine : MixLine (nBase, nLine, v);
-		}
-	}
-
-	// the border of the back buffer, if what it shows near the menu changed
-	u32 nSum = 2166136261u;
-	const unsigned nReach = FADE_UI + 1;
-	const unsigned y0 = m_nOY > nReach ? m_nOY - nReach : 0, y1 = m_nOY + GAME_H + nReach;
-	const unsigned x0 = m_nOX > nReach ? m_nOX - nReach : 0, x1 = m_nOX + GAME_W + nReach;
-	for (unsigned y = y0; y < y1 && y < H; y++)
-	{
-		for (unsigned x = x0; x < x1 && x < W; x++)
-		{
-			if (y >= m_nOY && y < m_nOY + GAME_H && x >= m_nOX && x < m_nOX + GAME_W)
-			{
-				x = m_nOX + GAME_W - 1;
-				continue;
-			}
-			nSum = (nSum ^ D[y * W + x]) * 16777619u;
-		}
-	}
-	nSum |= 1;
-	if (m_nMenuSum[m_nBack] != nSum)
-	{
-		FillBorder (m_nBack);
-		m_nMenuSum[m_nBack] = nSum;
-	}
 }
 
 // ---------------------------------------------------------------- the text
@@ -756,7 +522,7 @@ unsigned CVideoOut::InfoWidth (const char *pText) const
 	return n * m_nU;
 }
 
-unsigned CVideoOut::DrawInfoText (unsigned nBuf, unsigned x, unsigned y, const char *pText, u32 nColor)
+unsigned CVideoOut::DrawInfoText (const TTarget &T, unsigned x, unsigned y, const char *pText, u32 nColor)
 {
 	const unsigned U = m_nU;
 	const u32 nInk = Native (RGB ((nColor >> 16) & 0xFF, (nColor >> 8) & 0xFF, nColor & 0xFF));
@@ -765,7 +531,7 @@ unsigned CVideoOut::DrawInfoText (unsigned nBuf, unsigned x, unsigned y, const c
 		unsigned ch = (unsigned char) *s;
 		if (ch < 32 || ch >= 128) ch = '?';
 		const unsigned nAdv = g_InfoWidth[ch - 32] * U;
-		if (x + nAdv + U > m_nWidth || y + 9 * U > m_nHeight)
+		if (x + nAdv + U > T.nW || y + 9 * U > T.nH)
 		{
 			break;
 		}
@@ -784,7 +550,7 @@ unsigned CVideoOut::DrawInfoText (unsigned nBuf, unsigned x, unsigned y, const c
 					}
 					for (unsigned sy = 0; sy < U; sy++)
 					{
-						u32 *p = Row (nBuf, y + r * U + sy + o) + x + k * U + o;
+						u32 *p = T.pBase + (y + r * U + sy + o) * T.nPitch + x + k * U + o;
 						for (unsigned sx = 0; sx < U; sx++)
 						{
 							p[sx] = c;
@@ -802,6 +568,7 @@ unsigned CVideoOut::DrawInfoText (unsigned nBuf, unsigned x, unsigned y, const c
 // and SELECT below it
 void CVideoOut::DrawInfoLines (unsigned nBuf)
 {
+	const TTarget T = {Row (nBuf, 0), m_nPitchPx, m_nWidth, m_nHeight};
 	const unsigned U = m_nU, nGameW = GAME_W * m_nM, nGameH = GAME_H * m_nM;
 	const unsigned nTop = (m_nGameY - TEXT_H * U) / 2;
 	const unsigned nBelow = m_nHeight - m_nGameY - nGameH;
@@ -810,12 +577,12 @@ void CVideoOut::DrawInfoLines (unsigned nBuf)
 	unsigned x = m_nGameX;
 	if (m_Info.pTitle)
 	{
-		x = DrawInfoText (nBuf, x, nTop, m_Info.pTitle, INFO_WHITE);
+		x = DrawInfoText (T, x, nTop, m_Info.pTitle, INFO_WHITE);
 	}
 	if (m_Info.pMaker && m_Info.pMaker[0])
 	{
-		x = DrawInfoText (nBuf, x, nTop, "  ", INFO_GREY);
-		DrawInfoText (nBuf, x, nTop, m_Info.pMaker, INFO_GREY);
+		x = DrawInfoText (T, x, nTop, "  ", INFO_GREY);
+		DrawInfoText (T, x, nTop, m_Info.pMaker, INFO_GREY);
 	}
 
 	// "A attack   B jump   C magic"; the same name on the buttons next to
@@ -830,12 +597,12 @@ void CVideoOut::DrawInfoLines (unsigned nBuf)
 		}
 		if (i > 0)
 		{
-			x = DrawInfoText (nBuf, x, nBottom, "   ", INFO_GREY);
+			x = DrawInfoText (T, x, nBottom, "   ", INFO_GREY);
 		}
 		for (unsigned b = i; b < j; b++)
 		{
 			char Letter[3] = {(char) ('A' + b), ' ', '\0'};
-			x = DrawInfoText (nBuf, x, nBottom, Letter, INFO_WHITE);
+			x = DrawInfoText (T, x, nBottom, Letter, INFO_WHITE);
 		}
 		char Name[32];
 		unsigned n = 0;
@@ -844,15 +611,14 @@ void CVideoOut::DrawInfoLines (unsigned nBuf)
 			Name[n++] = *s >= 'A' && *s <= 'Z' ? (char) (*s + 32) : *s;
 		}
 		Name[n] = '\0';
-		x = DrawInfoText (nBuf, x, nBottom, Name, INFO_GREY);
+		x = DrawInfoText (T, x, nBottom, Name, INFO_GREY);
 		i = j;
 	}
-	unsigned nSelW = InfoWidth ("SELECT coin");
-	unsigned xs = m_nGameX + nGameW - nSelW;
+	unsigned xs = m_nGameX + nGameW - InfoWidth ("SELECT coin");
 	if (xs > x)
 	{
-		xs = DrawInfoText (nBuf, xs, nBottom, "SELECT", INFO_WHITE);
-		DrawInfoText (nBuf, xs, nBottom, " coin", INFO_GREY);
+		xs = DrawInfoText (T, xs, nBottom, "SELECT", INFO_WHITE);
+		DrawInfoText (T, xs, nBottom, " coin", INFO_GREY);
 	}
 }
 
@@ -863,26 +629,35 @@ void CVideoOut::DrawSideText (boolean bRight, const TTextSpan *pSpans, unsigned 
 		return;
 	}
 	const unsigned U = m_nU;
+	const unsigned nCol = bRight ? 1 : 0;
 	const unsigned nBuf = SharedLoad (m_bRacing) ? m_nBack ^ 1 : m_nBack;
-	TRect &Old = m_Text[nBuf][bRight ? 1 : 0];
-	if (Old.x1)
+
+	// what it says (0 = nothing): unchanged, nothing to do
+	u32 nSum = 0;
+	if (nSpans)
 	{
-		BgRect (nBuf, Old.x0, Old.y0, Old.x1, Old.y1);
-		Old.x1 = 0;
+		nSum = 2166136261u;
+		for (unsigned i = 0; i < nSpans; i++)
+		{
+			nSum = (nSum ^ pSpans[i].nColor) * 16777619u;
+			for (const char *s = pSpans[i].pText; *s; s++)
+			{
+				nSum = (nSum ^ (unsigned char) *s) * 16777619u;
+			}
+		}
+		nSum |= 1;
 	}
-	if (nSpans == 0)
+	if (nSum == m_nTextSum[nBuf][nCol])
 	{
-		FbFlush ();
 		return;
 	}
+	m_nTextSum[nBuf][nCol] = nSum;
 
 	// the lines, character by character with their colours
-	static char Ch[2][SIDE_LINES][SIDE_CHARS + 1];
-	static u32 Col[2][SIDE_LINES][SIDE_CHARS];
-	char (*L)[SIDE_CHARS + 1] = Ch[bRight ? 1 : 0];
-	u32 (*C)[SIDE_CHARS] = Col[bRight ? 1 : 0];
+	static char L[SIDE_LINES][SIDE_CHARS + 1];
+	static u32 C[SIDE_LINES][SIDE_CHARS];
 	unsigned nLen[SIDE_LINES] = {0};
-	unsigned nLines = 1;
+	unsigned nLines = nSpans ? 1 : 0;
 	for (unsigned i = 0; i < nSpans; i++)
 	{
 		for (const char *s = pSpans[i].pText; *s; s++)
@@ -917,29 +692,26 @@ void CVideoOut::DrawSideText (boolean bRight, const TTextSpan *pSpans, unsigned 
 	// too wide for the column: wrap at the last space that fits
 	const unsigned nGameW = GAME_W * m_nM, nGameH = GAME_H * m_nM;
 	const unsigned nMaxW = m_bSide ? m_nGameX - 2 * m_nGap : m_nWidth - 2 * m_nGap;
-	for (unsigned l = 0; l < nLines && nLines < SIDE_LINES; l++)
+	for (unsigned l = 0; m_bSide && l < nLines && nLines < SIDE_LINES; l++)
 	{
 		if (InfoWidth (L[l]) <= nMaxW)
 		{
 			continue;
 		}
 		int nCut = -1;
-		for (int k = (int) nLen[l] - 1; k > 0; k--)
+		for (int k = (int) nLen[l] - 1; k > 0 && nCut < 0; k--)
 		{
 			if (L[l][k] == ' ')
 			{
-				char c = L[l][k];
 				L[l][k] = '\0';
-				boolean bFits = InfoWidth (L[l]) <= nMaxW;
-				L[l][k] = c;
-				if (bFits)
+				if (InfoWidth (L[l]) <= nMaxW)
 				{
 					nCut = k;
-					break;
 				}
+				L[l][k] = ' ';
 			}
 		}
-		if (nCut < 0 || !m_bSide)
+		if (nCut < 0)
 		{
 			continue;			// one long word: cut by the screen edge
 		}
@@ -958,44 +730,95 @@ void CVideoOut::DrawSideText (boolean bRight, const TTextSpan *pSpans, unsigned 
 		nLen[l] = (unsigned) nCut;
 	}
 
-	// where
+	// where: the lines' box
 	const unsigned nPitch = TEXT_PITCH * U;
 	const unsigned nTextH = nLines * nPitch - (TEXT_PITCH - TEXT_H) * U;
-	unsigned y;
+	unsigned y0;
 	if (m_bSide)
 	{
-		y = bRight ? m_nColTop : (m_nColBot > nTextH ? m_nColBot - nTextH : 0);
+		y0 = bRight ? m_nColTop : (m_nColBot > nTextH ? m_nColBot - nTextH : 0);
 	}
 	else if (bRight)
 	{
-		y = m_nGameY > TEXT_H * U ? (m_nGameY - TEXT_H * U) / 2 : 0;
+		y0 = m_nGameY > TEXT_H * U ? (m_nGameY - TEXT_H * U) / 2 : 0;
 	}
 	else
 	{
 		unsigned nBelow = m_nHeight - m_nGameY - nGameH;
-		y = m_nGameY + nGameH + (nBelow > TEXT_H * U ? (nBelow - TEXT_H * U) / 2 : 0);
+		y0 = m_nGameY + nGameH + (nBelow > TEXT_H * U ? (nBelow - TEXT_H * U) / 2 : 0);
 	}
-
-	TRect New = {m_nWidth, y, 0, y + nLines * nPitch};
-	for (unsigned l = 0; l < nLines; l++, y += nPitch)
+	unsigned nX[SIDE_LINES];
+	TRect New = {m_nWidth, y0, 0, y0 + nLines * nPitch};
+	for (unsigned l = 0; l < nLines; l++)
 	{
 		const unsigned w = InfoWidth (L[l]);
-		unsigned x;
-		if (!m_bSide)		x = w < m_nWidth ? (m_nWidth - w) / 2 : 0;
-		else if (bRight)	x = m_nGameX + nGameW + m_nGap;
-		else			x = m_nGameX - m_nGap > w ? m_nGameX - m_nGap - w : 0;
-		if (x < New.x0) New.x0 = x;
-		unsigned x1 = x;
+		if (!m_bSide)		nX[l] = w < m_nWidth ? (m_nWidth - w) / 2 : 0;
+		else if (bRight)	nX[l] = m_nGameX + nGameW + m_nGap;
+		else			nX[l] = m_nGameX - m_nGap > w ? m_nGameX - m_nGap - w : 0;
+		if (nX[l] < New.x0) New.x0 = nX[l];
+		if (nX[l] + w + U > New.x1) New.x1 = nX[l] + w + U;
+	}
+	if (New.x1 > m_nWidth) New.x1 = m_nWidth;
+	if (New.y1 > m_nHeight) New.y1 = m_nHeight;
+
+	// the block to copy: the old box and the new one together
+	TRect &Old = m_Text[nBuf][nCol];
+	TRect B = New;
+	if (nLines == 0)
+	{
+		B = Old;
+	}
+	else if (Old.x1)
+	{
+		if (Old.x0 < B.x0) B.x0 = Old.x0;
+		if (Old.y0 < B.y0) B.y0 = Old.y0;
+		if (Old.x1 > B.x1) B.x1 = Old.x1;
+		if (Old.y1 > B.y1) B.y1 = Old.y1;
+	}
+	Old = nLines ? New : TRect {0, 0, 0, 0};
+	if (B.x1 <= B.x0 || B.y1 <= B.y0)
+	{
+		return;
+	}
+	if (B.y1 - B.y0 > BLOCK_H) B.y1 = B.y0 + BLOCK_H;
+
+	// prepared apart: the border, then the text
+	const unsigned nBW = B.x1 - B.x0, nBH = B.y1 - B.y0;
+	for (unsigned y = 0; y < nBH; y++)
+	{
+		u32 *p = m_pBlock + y * nBW;
+		for (unsigned x = 0; x < nBW; x++)
+		{
+			p[x] = BgPixel (B.x0 + x, B.y0 + y);
+		}
+	}
+	const TTarget T = {m_pBlock, nBW, nBW, nBH};
+	for (unsigned l = 0; l < nLines; l++)
+	{
+		unsigned x = nX[l] - B.x0;
+		const unsigned y = y0 + l * nPitch - B.y0;
 		for (unsigned k = 0; k < nLen[l]; k++)
 		{
 			char One[2] = {L[l][k], '\0'};
-			x1 = DrawInfoText (nBuf, x1, y, One, C[l][k]);
+			x = DrawInfoText (T, x, y, One, C[l][k]);
 		}
-		if (x1 + U > New.x1) New.x1 = x1 + U;
 	}
-	if (New.x1 > New.x0)
+
+	// then copied, a finished row at a time (never over the picture)
+	const unsigned gx0 = m_nGameX, gx1 = m_nGameX + nGameW;
+	const unsigned gy0 = m_nGameY, gy1 = m_nGameY + nGameH;
+	for (unsigned y = 0; y < nBH; y++)
 	{
-		Old = New;
+		const unsigned yy = B.y0 + y;
+		unsigned x0 = B.x0, x1 = B.x1;
+		if (yy >= gy0 && yy < gy1)
+		{
+			if (x0 < gx1 && x1 > gx0)
+			{
+				continue;		// cannot happen: the columns are beside it
+			}
+		}
+		memcpy (Row (nBuf, yy) + x0, m_pBlock + y * nBW, (x1 - x0) * 4);
 	}
 	FbFlush ();
 }

@@ -13,10 +13,12 @@
 #define UI_H	GAME_H		// 224
 #define UI_ELLIPSIS	"\x1F"	// "..." in one character (Text, CText)
 
-// Palette (0xRRGGBB): petrol blue grid, dark panels with a white frame, a
-// crimson band on the selected line
-#define UI_BG		0x05566Fu
-#define UI_GRID		0x0E6882u
+// Palette (0xRRGGBB): a dark petrol grid (the same pattern as the border
+// around the picture, video.cpp), dark panels with a white frame, a crimson
+// band on the selected line
+#define UI_BG		0x011921u	// petrol 0x05566F at 30%
+#define UI_GRID		0x041F27u	// 0x0E6882 at 30%
+#define UI_CELL		16		// a grid line every 16 pixels
 #define UI_FRAME	0xFFFFFFu
 #define UI_LINE		0x033C50u	// inside the frame, and the separators
 #define UI_PANEL	0x021E2Au

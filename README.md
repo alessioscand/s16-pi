@@ -15,15 +15,18 @@ public release: 1.0.0.
   crimson band; Cyberwire for the game list, Matinee for the rest), drawn
   at 320x224 like the game. Long titles scroll in the list. The logo is
   drawn by `CUI::Logo`.
-- **Bezel** (OPTIONS > BEZEL, `bezel=off` in `s16pi.cfg` for black): the
-  border is the menus' grid at 30%, its lines fading out near the picture;
-  at 1080p the game's title, maker and year above the picture and its
-  buttons below (`src/gameinfo.cpp`). The status line (left column) and
-  the messages (right column) are in Area51 with a hard shadow, the same
-  at 720p and 1080p. With no game loaded, the menus' own background
-  becomes the same pattern, fading near panels and text (`BezelMenu`). The
-  HVS enlarges at most 2x, so the text can have 2 screen pixels per font
-  pixel (1080p: 2x CPU, 2x HVS).
+- **Bezel**: with no game loaded (start, loading, list, OPTIONS) the
+  menus' dark grid fills the whole screen, drawn without a filter so it is
+  one with the border. With a game, OPTIONS > BEZEL (`bezel=off` in
+  `s16pi.cfg` for black): the same grid around the picture and, at 1080p,
+  the game's title, maker and year above it and its buttons below
+  (`src/gameinfo.cpp`). The border is drawn once in both buffers when it
+  changes. The status line (left column) and the messages (right column)
+  are in Area51 with a hard shadow, the same at 720p and 1080p, drawn only
+  when they change: prepared apart and copied a finished row at a time, so
+  beam racing never shows them half cleared. The HVS enlarges at most 2x,
+  so the text can have 2 screen pixels per font pixel (1080p: 2x CPU, 2x
+  HVS, as with scanlines).
 - **Core** (`core/`): the System 16B and System 18 machines, written by
   hand on MAME's logic and checked against MAME 0.264 on the Linux harness.
   - `s16.cpp`: 68000 (Musashi), Z80, the 315-5195 memory mapper, I/O, time

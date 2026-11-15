@@ -40,9 +40,8 @@ void CUI::Fill (int x, int y, int w, int h, u32 c)
 	}
 }
 
-// Background: a grid on petrol blue, a line every 16 pixels, closed on all
-// four sides (the last column and row are 1 pixel narrower)
-#define BG_CELL		16
+// Background: the dark grid, a line every 16 pixels; it goes on in the
+// border around the picture (video.cpp), lined up with it
 
 // Screens without a game behind them (bFreeze: kept for the callers; the grid
 // does not move)
@@ -54,7 +53,7 @@ void CUI::Background (boolean bFreeze)
 		u32 *p = &m_Buf[y * GAME_SRC_PITCH];
 		for (int x = 0; x < GAME_W; x++)
 		{
-			boolean bLine = x % BG_CELL == 0 || y % BG_CELL == 0 || x == GAME_W - 1 || y == GAME_H - 1;
+			boolean bLine = x % UI_CELL == 0 || y % UI_CELL == 0;
 			p[x] = ARGB (bLine ? UI_GRID : UI_BG);
 		}
 	}

@@ -28,7 +28,7 @@
 
 #define BEZEL_BLACK	0	// BEZEL OFF: black around the picture
 #define BEZEL_GAME	1	// BEZEL INFO, a game loaded: the pattern, title and buttons
-#define BEZEL_MENU	2	// BEZEL INFO, no game: the pattern under the menus
+#define BEZEL_MENU	2	// no game (whatever BEZEL says): the menus' grid all over
 
 // Logical colours (R in the low byte); the screen converts them if the
 // framebuffer stores red in the high byte (Pi 4)
@@ -67,8 +67,9 @@ public:
 			       u32 nFG, u32 nBG) = 0;
 	virtual void ClearRows (unsigned nBuffer, unsigned nFirstRow, unsigned nRows, u32 nColor) = 0;
 
-	// The visible GAME_W x GAME_H area into the back buffer
-	virtual void DrawGame (const u32 *pSource) = 0;
+	// The visible GAME_W x GAME_H area into the back buffer; bFilter = FALSE:
+	// no scanlines (the menus with no game behind them)
+	virtual void DrawGame (const u32 *pSource, boolean bFilter = TRUE) = 0;
 	// one line of it, with the caller's scratch lines (GAME_W * 8 pixels each):
 	// called by core 1 as each line is finished
 	virtual void DrawGameLine (const u32 *pSource, unsigned y, u32 *pLine, u32 *pDark) = 0;
@@ -86,10 +87,6 @@ public:
 		const char *pButtons[6];		// buttons A..F, 0 after the last
 	};
 	virtual void SetBezel (unsigned nMode, const TBezelInfo *pInfo, unsigned nId) = 0;
-	// BEZEL_MENU: before a menu screen goes to the screen, its background
-	// (the UI's grid colours) becomes the dark pattern, faded near the panels,
-	// and the border of the back buffer follows it
-	virtual void BezelMenu (u32 *pUIBuf) = 0;
 
 	// Text beside the picture, '\n' starts a new line (a line too long for
 	// the column wraps at a space). Left column: lines right-aligned to the

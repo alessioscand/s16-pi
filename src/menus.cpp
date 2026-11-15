@@ -10,8 +10,9 @@
 void CKernel::ShowUIFrame (boolean bWait, const char *pTopMessage)
 {
 	UpdateBezel ();
-	m_Video.BezelMenu (m_pUI->GetBuffer ());	// no game: the menu's background
-	FrameDrawPicture (m_pUI->GetBuffer ());
+	// no game behind the menu: no filter, so that its grid and the border's
+	// are one
+	FrameDrawPicture (m_pUI->GetBuffer (), m_nLoaded >= 0);
 	if (pTopMessage && pTopMessage[0])
 	{
 		// in the left column, where the status line goes while playing
