@@ -92,19 +92,13 @@ void CKernel::ApplyVideoMode (void)
 	Log (Line, COLOR_TEXT);
 }
 
-// the border around the picture: with no game loaded always the menus'
-// grid; with a game, black (BEZEL OFF) or the grid with the game's title,
-// maker, year and buttons
+// the border around the picture: with no game loaded always the grid; with
+// a game, OPTIONS > BEZEL, with the game's title, maker, year and buttons
 void CKernel::UpdateBezel (void)
 {
 	if (m_nLoaded < 0)
 	{
-		m_Video.SetBezel (BEZEL_MENU, 0, 0);
-		return;
-	}
-	if (!m_bBezel)
-	{
-		m_Video.SetBezel (BEZEL_BLACK, 0, 0);
+		m_Video.SetBezel (BEZEL_GRID, 0, 0);
 		return;
 	}
 	static char Title[64], Maker[64];
@@ -128,7 +122,7 @@ void CKernel::UpdateBezel (void)
 	{
 		Info.pButtons[i] = pInfo ? pInfo->pButtons[i] : 0;
 	}
-	m_Video.SetBezel (BEZEL_GAME, &Info, 1 + (unsigned) m_nLoaded);
+	m_Video.SetBezel (m_nBezel, &Info, 1 + (unsigned) m_nLoaded);
 }
 
 // usbpoll= value for the log and s16pi.cfg
@@ -186,7 +180,10 @@ void CKernel::LoadConfig (void)
 	else if (strstr (Text, "filter=SCANLINES_STRONG"))	m_nFilter = FILTER_SCAN_STRONG;
 	else if (strstr (Text, "filter=SCANLINES"))		m_nFilter = FILTER_SCAN_MEDIUM;
 	if (strstr (Text, "scaler=cpu"))	m_bHVS = FALSE;
-	if (strstr (Text, "bezel=off"))		m_bBezel = FALSE;
+	if (strstr (Text, "bezel=off"))			m_nBezel = 0;
+	else if (strstr (Text, "bezel=gridinfo"))	m_nBezel = BEZEL_GRID | BEZEL_INFO;
+	else if (strstr (Text, "bezel=grid"))		m_nBezel = BEZEL_GRID;
+	else if (strstr (Text, "bezel=info"))		m_nBezel = BEZEL_INFO;
 	// (multicore and the scanlines on a Pi 3: decided after LoadConfig, also
 	// when s16pi.cfg does not exist yet)
 	// USB pads are polled every 1 ms (like usbhid.jspoll=1 on Linux);
@@ -220,7 +217,7 @@ void CKernel::LoadConfig (void)
 
 	char Line[140];
 	snprintf (Line, sizeof Line, "Settings: filter %s, bezel %s, USB polling %s%s",
-		  FilterName (m_nFilter), m_bBezel ? "info" : "off",
+		  FilterName (m_nFilter), BezelName (m_nBezel, FALSE),
 		  UsbPollName (), g_nUSBInterruptPollMs ? " Hz" : "");
 	Log (Line, COLOR_TEXT);
 	char Delay[16];
@@ -236,8 +233,14 @@ void CKernel::LoadConfig (void)
 void CKernel::SaveConfig (void)
 {
 	char Text[200];
-	snprintf (Text, sizeof Text, "filter=%s\r\n%s%s",
-		  FilterName (m_nFilter), m_bHVS ? "" : "scaler=cpu\r\n", m_bBezel ? "" : "bezel=off\r\n");
+	snprintf (Text, sizeof Text, "filter=%s\r\n%s",
+		  FilterName (m_nFilter), m_bHVS ? "" : "scaler=cpu\r\n");
+	if (m_nBezel != (BEZEL_GRID | BEZEL_INFO))
+	{
+		strcat (Text, "bezel=");
+		strcat (Text, BezelName (m_nBezel, FALSE));
+		strcat (Text, "\r\n");
+	}
 	if (g_nUSBInterruptPollMs != 1)
 	{
 		strcat (Text, "usbpoll=");

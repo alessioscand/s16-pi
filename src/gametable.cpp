@@ -6,9 +6,8 @@
  * controls.dat (SirPoonga, Howard Casto), checked against the games.
  */
 #include "gameinfo.h"
-#include <string.h>
 
-static const TGameInfo s_Info[] =
+const TGameInfo g_GameInfo[] =
 {
 	{"aliensyn", "Alien Syndrome", "", "1987", "Sega", {"Shot"}},
 	{"aliensyn3", "Alien Syndrome", "", "1987", "Sega", {"Shot"}},
@@ -92,14 +91,4 @@ static const TGameInfo s_Info[] =
 	{"wb34", "Wonder Boy III: Monster Lair", "", "1988", "Sega / Westone", {"Shot", "Jump"}},
 };
 
-const TGameInfo *GameInfoFind (const char *pSet)
-{
-	for (const TGameInfo &I : s_Info)
-	{
-		if (strcmp (I.pSet, pSet) == 0)
-		{
-			return &I;
-		}
-	}
-	return 0;
-}
+const unsigned g_nGameInfo = sizeof g_GameInfo / sizeof g_GameInfo[0];

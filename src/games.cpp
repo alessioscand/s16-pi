@@ -181,7 +181,7 @@ void CKernel::ScanGames (void)
 		strcpy (G.File, Info.fname);
 		char Title[64], Region[32], MameTitle[64], MameRegion[32];
 		SplitMameName (s16_game_desc (nGame), MameTitle, sizeof MameTitle, MameRegion, sizeof MameRegion);
-		const TGameInfo *pInfo = GameInfoFind (Base);	// gameinfo.cpp
+		const TGameInfo *pInfo = GameInfoFind (Base);	// gametable.cpp
 		if (pInfo)
 		{
 			strncpy (Title, pInfo->pTitle, sizeof Title - 1);

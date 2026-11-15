@@ -10,7 +10,7 @@
 #include "racing.h"
 #include "stats.h"
 #include "smp.h"
-#include "fontdata.h"
+#include "fonts.h"
 #include "s16_api.h"
 
 extern "C" {

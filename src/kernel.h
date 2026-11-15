@@ -218,7 +218,7 @@ private:
 	boolean			 m_bHVS;	// FALSE: scaler=cpu
 	boolean			 m_bMultiCore;	// FALSE: multicore=off, or core 1 did not start
 	boolean			 m_bFilterAllowed;
-	boolean			 m_bBezel;	// BEZEL INFO (FALSE: bezel=off, black)
+	unsigned		 m_nBezel;	// OPTIONS > BEZEL: BEZEL_GRID, BEZEL_INFO (0: black)
 
 	// frame pacing and the status line
 	boolean			 m_bVSync;	// FALSE: the firmware's vsync does not block

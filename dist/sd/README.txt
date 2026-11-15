@@ -13,9 +13,9 @@ s16-pi 1.0.0 - Bare-metal SEGA System 16 emulator for Raspberry Pi 3 and 4
   - Scanlines (light, medium, strong) and a COMPOSITE filter that looks
     like an old TV.
   - Up to 4 players, save state, the games' own DIP switches.
-  - Around the picture: the game's title, maker and year, and what its
-    buttons do (at 1080p). OPTIONS > BEZEL: INFO, or OFF for black while
-    playing.
+  - Around the picture: the menus' grid, with the game's title, maker
+    and year and what its buttons do (at 1080p). OPTIONS > BEZEL:
+    GRID+INFO, GRID, INFO (on black) or OFF.
   - Hiscores are saved in s16pi/saves/<game>.hi (57 sets, as MAME's
     hiscore plugin).
   - Each game's battery-kept RAM (settings, bookkeeping, and the scores

@@ -99,7 +99,7 @@ unsigned CKernel::RunList (unsigned nSel)
 		const char *pMsg = m_pInput->GetPadCount () == 0 ? "CONNECT A USB GAMEPAD" : "";
 		nTicks = nSel == nShown ? nTicks + 1 : 0;
 		nShown = nSel;
-		m_pUI->DrawList (m_pGames, m_nGames, nSel, "", m_nLoaded >= 0, nTicks);
+		m_pUI->DrawList (m_pGames, m_nGames, nSel, m_nLoaded >= 0, nTicks);
 		ShowUIFrame (TRUE, pMsg);
 	}
 }
@@ -111,7 +111,7 @@ void CKernel::RunSystemMenu (void)
 	unsigned nSel = 0;
 	u32 nPrev = ~0u;
 	unsigned nOldFilter = m_nFilter;
-	boolean bOldBezel = m_bBezel;
+	unsigned nOldBezel = m_nBezel;
 	const char *pMsg = "";
 	unsigned nFrame = 0;
 
@@ -162,7 +162,7 @@ void CKernel::RunSystemMenu (void)
 				break;
 
 			case SmBezel:
-				m_bBezel = !m_bBezel;		// drawn by the next frame
+				m_nBezel = BezelNext (m_nBezel, nDir);	// drawn by the next frame
 				break;
 
 			case SmControls:
@@ -208,7 +208,7 @@ void CKernel::RunSystemMenu (void)
 		// not allowed only on a Pi 3 with multicore=off
 		Items[SmFilter].pValue = m_bFilterAllowed ? FilterLabels[m_nFilter] : "MULTICORE OFF";
 		Items[SmFilter].bDisabled = !m_bFilterAllowed;
-		Items[SmBezel].pValue = m_bBezel ? "INFO" : "OFF";
+		Items[SmBezel].pValue = BezelName (m_nBezel, TRUE);
 
 		const char *pShow = pMsg;
 		u32 nShowColor = UI_VALUE;
@@ -222,12 +222,12 @@ void CKernel::RunSystemMenu (void)
 		ShowUIFrame ();
 	}
 
-	if (m_nFilter != nOldFilter || m_bBezel != bOldBezel)
+	if (m_nFilter != nOldFilter || m_nBezel != nOldBezel)
 	{
 		SaveConfig ();
 		char Line[120];
 		snprintf (Line, sizeof Line, "New settings: filter %s, bezel %s", FilterName (m_nFilter),
-			  m_bBezel ? "info" : "off");
+			  BezelName (m_nBezel, FALSE));
 		Log (Line, COLOR_TEXT);
 	}
 }
@@ -355,7 +355,7 @@ boolean CKernel::RunDipMenu (void)
 		static const TButtonHint Hints[2] = {{'A', "CHANGE"}, {'B', "BACK"}};
 		static const TButtonHint ClearHints[2] = {{'A', "CLEAR"}, {'B', "BACK"}};
 		m_pUI->DrawPanelMenu (TRUE, "DIP SWITCHES", Items + nFirst, nShown, nSel - nFirst, pMsg, UI_WARN,
-				      nSel == nItems ? ClearHints : Hints, 2, pLocation, TRUE, Window, nFirst > 0, nFirst + nShown < nRows);
+				      nSel == nItems ? ClearHints : Hints, 2, pLocation, Window, nFirst > 0, nFirst + nShown < nRows);
 		ShowUIFrame ();
 	}
 
@@ -519,8 +519,8 @@ boolean CKernel::RunMapping (unsigned nSlot, boolean bOverGame)
 
 boolean CKernel::PowerOffCountdown (void)
 {
-	// 3 seconds, B cancels; drawn over whatever the UI buffer shows
-	static u32 Saved[GAME_SRC_PITCH * GAME_SRC_LINES];
+	// 3 seconds, B cancels: a box alone, over the paused game or the grid
+	static u32 Saved[GAME_SRC_PITCH * GAME_SRC_LINES];	// the menu, for B
 	memcpy (Saved, m_pUI->GetBuffer (), sizeof Saved);
 	u32 nPrev = ~0u;
 	for (unsigned f = 0; f < 180; f++)
@@ -536,9 +536,8 @@ boolean CKernel::PowerOffCountdown (void)
 		}
 		char Line[24];
 		snprintf (Line, sizeof Line, "POWER OFF IN %u", 3 - f / 60);
-		memcpy (m_pUI->GetBuffer (), Saved, sizeof Saved);
 		static const TButtonHint Cancel = {'B', "CANCEL"};
-		m_pUI->DrawBox (Line, "", &Cancel);
+		m_pUI->DrawBox (m_nLoaded >= 0, Line, "", &Cancel);
 		ShowUIFrame ();
 	}
 	return TRUE;

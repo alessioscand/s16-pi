@@ -1,9 +1,9 @@
 /*
- * s16-pi - HDMI output (see video.h)
+ * HDMI output (see video.h)
  */
-#include "fontdata.h"
 #include "video.h"
-#include "ui.h"
+#include "fonts.h"
+#include "theme.h"
 #include "fbmap.h"
 #include <circle/bcmpropertytags.h>
 #include <circle/font.h>
@@ -14,8 +14,7 @@
 
 #define MAX_LINE	(GAME_W * 8)		// longest scaled line we support
 
-// the border: the menus' grid (ui.h), a line every UI_CELL UI pixels, lined
-// up with the menus' own
+// the border: the theme's grid (ThemeGrid), the same as behind the menus
 
 // the text: Area51 at 2 screen pixels per font pixel
 #define TEXT_H		7			// font pixels: capitals and digits
@@ -50,11 +49,9 @@ CVideoOut::CVideoOut (void)
 	m_nGap (0),
 	m_nColTop (0),
 	m_nColBot (0),
-	m_nBezel (BEZEL_BLACK),
+	m_nBezel (0),
 	m_nBezelId (0),
 	m_bBezelDrawn (FALSE),
-	m_nBgBase (0xFF000000u),
-	m_nBgLine (0xFF000000u),
 	m_pBlock (0),
 	m_pLine (0),
 	m_pDark (0),
@@ -106,7 +103,7 @@ boolean CVideoOut::Allocate (unsigned nWidth, unsigned nHeight)
 
 	// Byte order of the pixels: QEMU reports RGB (1, red in the low byte),
 	// the Pi 4 firmware (framebuffer_swap=1 by default) reports BGR (0, red
-	// in the high byte, the same layout as the core's lines)
+	// in the high byte, the same layout as the game's buffer)
 	CBcmPropertyTags Tags;
 	TPropertyTagSimple Order;
 	if (Tags.GetTag (PROPTAG_GET_PIXEL_ORDER, &Order, sizeof Order))
@@ -228,9 +225,7 @@ boolean CVideoOut::SetGameMode (unsigned nFilter, boolean bAllowHVS)
 	m_nColBot = m_nGameY + nGameH;
 	if (m_nColBot > m_nHeight - m_nGap) m_nColBot = m_nHeight - m_nGap;
 
-	// the border's colours
-	m_nBgBase = Native (RGB ((UI_BG >> 16) & 0xFF, (UI_BG >> 8) & 0xFF, UI_BG & 0xFF));
-	m_nBgLine = Native (RGB ((UI_GRID >> 16) & 0xFF, (UI_GRID >> 8) & 0xFF, UI_GRID & 0xFF));
+	// the border: drawn again by the next SetBezel
 	m_bBezelDrawn = FALSE;			// Allocate cleared both buffers
 	memset (m_Text, 0, sizeof m_Text);
 	memset (m_nTextSum, 0, sizeof m_nTextSum);
@@ -346,7 +341,7 @@ void CVideoOut::DrawGameLineTo (unsigned nBuffer, const u32 *pSource, unsigned y
 				   ? (M >= 4 ? M / 2 : (M >= 2 ? 1 : 0)) : 0;
 
 	// expand one source line horizontally into cached memory, converting
-	// the core's XRGB8888 (R high) to the framebuffer order if needed
+	// the game's XRGB8888 (R high) to the framebuffer order if needed
 	const u32 *pSrc = pSource + (GAME_SRC_Y + y) * GAME_SRC_PITCH + GAME_SRC_X;
 	u32 *pDst = pLine;
 	if (m_bRLow)
@@ -449,15 +444,17 @@ void CVideoOut::DrawNtscLine (unsigned y, const u32 *pNtsc, unsigned nNtscW, u32
 
 u32 CVideoOut::BgPixel (unsigned x, unsigned y) const
 {
-	if (m_nBezel == BEZEL_BLACK)
+	if (!(m_nBezel & BEZEL_GRID))
 	{
 		return 0xFF000000u;
 	}
-	const int M = (int) m_nM, nCell = UI_CELL * M;
-	int mx = ((int) x - (int) m_nGameX) % nCell, my = ((int) y - (int) m_nGameY) % nCell;
-	if (mx < 0) mx += nCell;
-	if (my < 0) my += nCell;
-	return mx < M || my < M ? m_nBgLine : m_nBgBase;
+	// the picture's pixel this one belongs to (negative: left of or above it)
+	const int M = (int) m_nM;
+	const int dx = (int) x - (int) m_nGameX, dy = (int) y - (int) m_nGameY;
+	const int gx = dx >= 0 ? dx / M : -((-dx + M - 1) / M);
+	const int gy = dy >= 0 ? dy / M : -((-dy + M - 1) / M);
+	const u32 c = ThemeGrid (gx, gy);
+	return Native (RGB ((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF));
 }
 
 // the whole border of a buffer (never the picture), then the game's info
@@ -481,7 +478,7 @@ void CVideoOut::FillBorder (unsigned nBuf)
 	}
 	m_Text[nBuf][0].x1 = m_Text[nBuf][1].x1 = 0;
 	m_nTextSum[nBuf][0] = m_nTextSum[nBuf][1] = 0;
-	if (m_nBezel == BEZEL_GAME && m_bBands)
+	if ((m_nBezel & BEZEL_INFO) && m_bBands)
 	{
 		DrawInfoLines (nBuf);
 	}
@@ -517,7 +514,7 @@ unsigned CVideoOut::InfoWidth (const char *pText) const
 	for (const char *s = pText; *s; s++)
 	{
 		unsigned ch = (unsigned char) *s;
-		n += g_InfoWidth[(ch >= 32 && ch < 128 ? ch : '?') - 32];
+		n += g_FontArea51Width[(ch >= 32 && ch < 128 ? ch : '?') - 32];
 	}
 	return n * m_nU;
 }
@@ -530,7 +527,7 @@ unsigned CVideoOut::DrawInfoText (const TTarget &T, unsigned x, unsigned y, cons
 	{
 		unsigned ch = (unsigned char) *s;
 		if (ch < 32 || ch >= 128) ch = '?';
-		const unsigned nAdv = g_InfoWidth[ch - 32] * U;
+		const unsigned nAdv = g_FontArea51Width[ch - 32] * U;
 		if (x + nAdv + U > T.nW || y + 9 * U > T.nH)
 		{
 			break;
@@ -541,7 +538,7 @@ unsigned CVideoOut::DrawInfoText (const TTarget &T, unsigned x, unsigned y, cons
 			const unsigned o = pass == 0 ? U : 0;
 			for (unsigned r = 0; r < 8; r++)
 			{
-				const unsigned char nRow = g_InfoFont[ch - 32][r];
+				const unsigned char nRow = g_FontArea51[ch - 32][r];
 				for (unsigned k = 0; nRow && k < 8; k++)
 				{
 					if (!(nRow & (0x80 >> k)))
@@ -564,7 +561,7 @@ unsigned CVideoOut::DrawInfoText (const TTarget &T, unsigned x, unsigned y, cons
 	return x;
 }
 
-// BEZEL_GAME at 1080p: title, maker and year above the picture; the buttons
+// BEZEL_INFO at 1080p: title, maker and year above the picture; the buttons
 // and SELECT below it
 void CVideoOut::DrawInfoLines (unsigned nBuf)
 {

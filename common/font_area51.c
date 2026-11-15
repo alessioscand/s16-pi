@@ -1,14 +1,14 @@
 /*
- * s16-pi - font for the text around the game (title, buttons, status line,
- * messages): 8x8, characters 0x20-0x7F, bit 7 = left pixel, each glyph moved
- * to the left edge; g_InfoWidth = how far the next character starts.
  * "Area51" from the ZX Origins collection by Damien Guard
- * (https://damieng.com/typography/zx-origins/), free for use in games
- * with credit. 0x7F is a degree sign.
+ * (https://damieng.com/typography/zx-origins/), free for use in games with
+ * credit. The text around the picture (title, buttons, status line,
+ * messages): 8x8, characters 0x20-0x7F, bit 7 = left pixel, each glyph
+ * moved to the left edge; g_FontArea51Width = where the next one starts.
+ * Character 0x7F is a degree sign.
  */
-#include "fontdata.h"
+#include "fonts.h"
 
-const unsigned char g_InfoFont[96][8] =
+const unsigned char g_FontArea51[96][8] =
 {
 	{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},	//  
 	{0x80, 0x80, 0x80, 0x80, 0x80, 0x00, 0x80, 0x00},	// !
@@ -108,7 +108,7 @@ const unsigned char g_InfoFont[96][8] =
 	{0x40, 0xA0, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00},	// degree
 };
 
-const unsigned char g_InfoWidth[96] =
+const unsigned char g_FontArea51Width[96] =
 {
 	3, 2, 5, 5, 5, 5, 5, 3, 4, 4, 4, 4, 3, 5, 2, 5,
 	5, 4, 5, 5, 5, 5, 5, 5, 5, 5, 2, 3, 4, 5, 4, 5,

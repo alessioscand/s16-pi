@@ -11,22 +11,22 @@ public release: 1.0.0.
   is shared with the three other projects; `hiscore.cpp/.h` (hiscores and
   battery RAM, from m92-pi's front-end) are new here, the others take them
   at their next release.
-- **Menus**: the new look (petrol grid, dark panels with a white frame,
-  crimson band; Cyberwire for the game list, Matinee for the rest), drawn
-  at 320x224 like the game. Long titles scroll in the list. The logo is
-  drawn by `CUI::Logo`.
-- **Bezel**: with no game loaded (start, loading, list, OPTIONS) the
-  menus' dark grid fills the whole screen, drawn without a filter so it is
-  one with the border. With a game, OPTIONS > BEZEL (`bezel=off` in
-  `s16pi.cfg` for black): the same grid around the picture and, at 1080p,
-  the game's title, maker and year above it and its buttons below
-  (`src/gameinfo.cpp`). The border is drawn once in both buffers when it
-  changes. The status line (left column) and the messages (right column)
-  are in Area51 with a hard shadow, the same at 720p and 1080p, drawn only
-  when they change: prepared apart and copied a finished row at a time, so
-  beam racing never shows them half cleared. The HVS enlarges at most 2x,
-  so the text can have 2 screen pixels per font pixel (1080p: 2x CPU, 2x
-  HVS, as with scanlines).
+- **Menus**: `common/ui.cpp`, the same layout as m92-pi and neo-pi (304x224
+  in the middle of the picture), with s16-pi's look from `src/theme.cpp`:
+  petrol grid, dark panels with an ice-white frame, crimson band; Cyberwire
+  for the game list, You Squared for the rest. Long titles scroll in the list.
+- **Bezel** (`common/video.cpp`): with no game loaded (start, loading, list,
+  OPTIONS) the grid fills the whole screen, the menus drawn without a
+  filter so they are one with the border. With a game, OPTIONS > BEZEL
+  (`bezel=gridinfo`, `grid`, `info` or `off` in `s16pi.cfg`): the grid or
+  black around the picture and, at 1080p, the game's title, maker and year
+  above it and its buttons below (`src/gametable.cpp`). The border is drawn
+  once in both buffers when it changes. The status line (left column) and
+  the messages (right column) are in Area51 with a hard shadow, the same at
+  720p and 1080p, drawn only when they change: prepared apart and copied a
+  finished row at a time, so beam racing never shows them half cleared. The
+  HVS enlarges at most 2x, so the text can have 2 screen pixels per font
+  pixel (1080p: 2x CPU, 2x HVS, as with scanlines).
 - **Core** (`core/`): the System 16B and System 18 machines, written by
   hand on MAME's logic and checked against MAME 0.264 on the Linux harness.
   - `s16.cpp`: 68000 (Musashi), Z80, the 315-5195 memory mapper, I/O, time
@@ -70,7 +70,7 @@ public release: 1.0.0.
   16C, controls a pad does not have (trackball, dial, analog stick,
   mahjong, two sticks, Where's Wally's light gun) and, for
   now, the games on a vertical monitor (Desert Breaker, Hammer Away). Tough Turf and Wonder Boy III (set 6), whose 8751 is
-  not dumped, use MAME's stand-ins for it. `src/gameinfo.cpp`, written
+  not dumped, use MAME's stand-ins for it. `src/gametable.cpp`, written
   by hand, has what the list shows of each set (short title, year, maker)
   and the names of its buttons.
 - **Checked against MAME 0.264** (attract mode, a frame every 150, first
@@ -111,8 +111,9 @@ core/        the System 16B and 18 machines (s16_api.h is all the front-end sees
 harness/     Linux test harness: make, ./s16test <roms> altbeast -s 300 -w
 tools/       gen_s16_tables.py: the game tables from MAME's driver;
              gen_s16_hiscore.py: the hiscore rows from MAME's hiscore.dat
-common/      shared with neo-pi, nes-pi and m92-pi (pads, audio, beam racing, TV filter, hiscores)
-src/         the s16-pi front-end (as m92-pi's, see its README, 4.1)
+common/      shared with m92-pi and neo-pi (pads, audio, beam racing, TV filter, screen and
+             border, menus, fonts, hiscores)
+src/         the s16-pi front-end (as m92-pi's, see its README, 4.1); its look in theme.cpp
 third_party/ musashi (68000) and z80 from Geolith (z80.c with one addition: a function
              of its own for the opcode fetches, for the MC8123), ymfm, miniz, snes_ntsc,
              rpi-firmware
