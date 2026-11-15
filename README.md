@@ -1,18 +1,20 @@
-# s16-pi - Technical notes (lab)
+# s16-pi - Technical notes
 
 Bare-metal SEGA System 16 emulator for Raspberry Pi 3 and 4 (no operating
-system: Circle, AArch64), the sibling of neo-pi, nes-pi and m92-pi. This
-repository is the lab: s16-pi is not released yet.
+system: Circle, AArch64), the sibling of neo-pi, nes-pi and m92-pi. First
+public release: 1.0.0.
 
 ## State
 
 - **Front-end**: m92-pi's, adapted to the System 16 picture (320x224, 262
   lines, the frame starts at line 224 with the vertical blank). `common/`
-  is the same as in the three other projects, byte for byte.
+  is shared with the three other projects; `hiscore.cpp/.h` (hiscores and
+  battery RAM, from m92-pi's front-end) are new here, the others take them
+  at their next release.
 - **Menus**: the new look (petrol grid, dark panels with a white frame,
   crimson band; Cyberwire for the game list, Matinee for the rest), drawn
-  at 320x224 like the game. Long titles scroll in the list. The logo is a
-  placeholder (`CUI::Logo`).
+  at 320x224 like the game. Long titles scroll in the list. The logo is
+  drawn by `CUI::Logo`.
 - **Core** (`core/`): the System 16B and System 18 machines, written by
   hand on MAME's logic and checked against MAME 0.264 on the Linux harness.
   - `s16.cpp`: 68000 (Musashi), Z80, the 315-5195 memory mapper, I/O, time
@@ -49,12 +51,12 @@ repository is the lab: s16-pi is not released yet.
     screen's 60 Hz, 4.8% faster than the board, with the sound in step.
 - **Games**: `core/s16_games.inc` and `dist/sd/s16pi/list.txt` are written
   by `tools/gen_s16_tables.py` from MAME's `segas16b.cpp` and `segas18.cpp`:
-  77 sets (57 System 16B, 20 System 18) with their ROMs, hardware, DIP
+  80 sets (57 System 16B, 23 System 18) with their ROMs, hardware, DIP
   switches and what each input bit is (and the bits that change with a
   DIP switch, as Moonwalker's coin chutes). Left out (the script says why
   for each): bootlegs and Korean boards, sets not working in MAME, System
   16C, controls a pad does not have (trackball, dial, analog stick,
-  mahjong, two sticks, light guns: Laser Ghost, Where's Wally) and, for
+  mahjong, two sticks, Where's Wally's light gun) and, for
   now, the games on a vertical monitor (Desert Breaker, Hammer Away). Tough Turf and Wonder Boy III (set 6), whose 8751 is
   not dumped, use MAME's stand-ins for it.
 - **Checked against MAME 0.264** (attract mode, a frame every 150, first
@@ -71,6 +73,13 @@ repository is the lab: s16-pi is not released yet.
   first 37 seconds of attract mode; then its demo play drifts by a few
   frames for a while and comes back in step. Its sound is at MAME's level.
   The other System 18 sets have not been run: no ROMs here.
+- **Laser Ghost**: its three guns played with pads. The MSM6253 A/D
+  converter reads the crosshairs; the game bends the side guns' shots
+  towards the centre, which `core/s16_guns.inc` (measured with the
+  harness's `gunmap`) compensates; the gun adjustment the game asks for
+  without its battery RAM is done by the front-end.
+- **Battery RAM**: the work RAM of every game, in `saves/<game>.nv`
+  (`common/hiscore.cpp`); DIP SWITCHES > CLEAR MEMORY wipes it.
 - **Hiscores**: 57 sets, from MAME's hiscore.dat (`core/s16_hiscore.inc`,
   `tools/gen_s16_hiscore.py`), kept by `common/hiscore.cpp`.
 - **Not there yet**: flip screen, vertical games, the VDP's sprite
@@ -86,7 +95,8 @@ repository is the lab: s16-pi is not released yet.
 ```
 core/        the System 16B and 18 machines (s16_api.h is all the front-end sees)
 harness/     Linux test harness: make, ./s16test <roms> altbeast -s 300 -w
-tools/       gen_s16_tables.py: the game tables from MAME's driver
+tools/       gen_s16_tables.py: the game tables from MAME's driver;
+             gen_s16_hiscore.py: the hiscore rows from MAME's hiscore.dat
 common/      shared with neo-pi, nes-pi and m92-pi (pads, audio, beam racing, TV filter, hiscores)
 src/         the s16-pi front-end (as m92-pi's, see its README, 4.1)
 third_party/ musashi (68000) and z80 from Geolith (z80.c with one addition: a function

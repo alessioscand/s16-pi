@@ -40,7 +40,9 @@ SET-UP
   3. Put your games in the s16pi folder as MAME romsets, one .zip per
      set with MAME's names (goldnaxe.zip, mwalk.zip ...), from a
      recent MAME: the protected sets need their .key file. A clone
-     needs its parent's zip beside it.
+     needs its parent's zip beside it: the Shinobi and Tetris sets need
+     shinobi.zip and tetris.zip, System 16A sets used only for their
+     ROMs.
   4. Connect a USB gamepad and the display (on a Pi 4, HDMI 0, next to the
      power socket). Insert the card and switch on.
 
