@@ -1,31 +1,36 @@
-s16-pi 0.3.2 - Bare-metal SEGA System 16 emulator for Raspberry Pi 3 and 4
+s16-pi 1.0.0 - Bare-metal SEGA System 16 emulator for Raspberry Pi 3 and 4
 ============================================================================
 
-WORK IN PROGRESS
+  The SEGA System 16B and System 18 games that play with a stick and
+  buttons on a horizontal screen, 80 MAME sets, protected ones included:
+  Altered Beast, Golden Axe, Shinobi, Alien Syndrome, Aurail, Wonder Boy
+  III, ESWAT, Cotton, Dynamite Dux, Riot City ... and on System 18 Shadow
+  Dancer, Moonwalker, Alien Storm, D. D. Crew, Bloxeed, Clutch Hitter and
+  Laser Ghost.
 
-  A version to try on the Pi: the System 16B and System 18 games that
-  play with a stick and buttons on a horizontal screen (Altered Beast,
-  Golden Axe, Shinobi, Alien Syndrome, Aurail, Wonder Boy III, ESWAT,
-  Cotton ... and on System 18 Shadow Dancer, Moonwalker, Alien Storm,
-  D. D. Crew, Bloxeed, Clutch Hitter, Laser Ghost), 80 MAME sets,
-  protected ones included. Picture, sound, save state, DIP switches and
-  the menus are there. Vertical games and hiscores are not yet.
-
-  Each game's battery-kept RAM (settings, bookkeeping, and the scores of
-  the games that keep them there) is saved in s16pi/saves/<game>.nv, as
-  on the real boards: credits left in a game are still there next time.
-  To start a game afresh: DIP SWITCHES > CLEAR MEMORY (the last row).
-
-  Laser Ghost is played with the pads instead of its 3 guns: the stick
-  moves the crosshair (blue, yellow and red for players 1, 2 and 3; it
-  shows while the player is in the game), A fires, B is the bomb. The
-  first time, the game asks for its gun adjustment: s16-pi does it by
-  itself in about 15 seconds (ADJUSTING THE GUNS), then keeps it in
-  saves/lghost.nv.
+  - Beam racing: each line is sent to the screen as soon as it is
+    drawn, for the lowest possible lag.
+  - Scanlines (light, medium, strong) and a COMPOSITE filter that looks
+    like an old TV.
+  - Up to 4 players, save state, the games' own DIP switches.
+  - Hiscores are saved in s16pi/saves/<game>.hi (57 sets, as MAME's
+    hiscore plugin).
+  - Each game's battery-kept RAM (settings, bookkeeping, and the scores
+    of the games that keep them there) is saved in
+    s16pi/saves/<game>.nv: credits left in a game are still there next
+    time. To start a game afresh: DIP SWITCHES > CLEAR MEMORY (the last
+    row).
+  - Laser Ghost is played with the pads instead of its 3 guns: the stick
+    moves the crosshair (blue, yellow and red for players 1, 2 and 3; it
+    shows while the player is in the game), A fires, B is the bomb. The
+    first time, the game asks for its gun adjustment: s16-pi does it by
+    itself in about 15 seconds (ADJUSTING THE GUNS), then keeps it in
+    saves/lghost.nv.
 
   System 18 boards run at 57.23 frames a second: here they run at the
   screen's 60, a little faster (music a little higher) than the real
-  thing.
+  thing. Vertical games (Passing Shot, Time Scanner, Action Fighter,
+  Desert Breaker) are not supported yet.
 
 SET-UP
 

@@ -71,13 +71,15 @@ repository is the lab: s16-pi is not released yet.
   first 37 seconds of attract mode; then its demo play drifts by a few
   frames for a while and comes back in step. Its sound is at MAME's level.
   The other System 18 sets have not been run: no ROMs here.
-- **Not there yet**: flip screen, hiscores, vertical games, the VDP's
-  sprite collision flag.
+- **Hiscores**: 57 sets, from MAME's hiscore.dat (`core/s16_hiscore.inc`,
+  `tools/gen_s16_hiscore.py`), kept by `common/hiscore.cpp`.
+- **Not there yet**: flip screen, vertical games, the VDP's sprite
+  collision flag.
 
 ## Plan
 
-1. Hiscores, the vertical games (Passing Shot, Time Scanner, Action
-   Fighter, Desert Breaker ...).
+1. The vertical games (Passing Shot, Time Scanner, Action Fighter,
+   Desert Breaker ...).
 
 ## Layout
 
