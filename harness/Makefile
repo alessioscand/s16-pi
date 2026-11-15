@@ -5,14 +5,18 @@ CXXFLAGS = -O2 -g -std=gnu++20 -Wall -Wextra -Wshadow -I$(CORE) -I$(THIRD)/musas
 CFLAGS	= -O2 -g -w -I$(CORE) -I$(THIRD)/musashi -I$(THIRD)/z80 -DMUSASHI_CNF='"s16_m68kconf.h"' -DZ80_OPCODE_HOOK=s16_z80_opcode
 OBJ	= obj/main.o obj/s16.o obj/s16_video.o obj/s16_sound.o obj/s18_vdp.o obj/s18_sound.o obj/i8751.o \
 	  obj/ymfm_opm.o obj/ymfm_opn.o obj/ymfm_adpcm.o obj/ymfm_ssg.o \
-	  obj/m68kcpu.o obj/m68kops.o obj/s16_crypt.o obj/s16_m68kstate.o obj/z80.o
+	  obj/m68kcpu.o obj/m68kops.o obj/s16_crypt.o obj/s16_m68kstate.o obj/z80.o obj/hiscore.o
 
 s16test: $(OBJ)
 	$(CXX) -o $@ $(OBJ)
 
-obj/main.o: main.cpp $(CORE)/*.h
+obj/main.o: main.cpp $(CORE)/*.h ../common/hiscore.h
 	@mkdir -p obj
-	$(CXX) $(CXXFLAGS) -c -o $@ $<
+	$(CXX) $(CXXFLAGS) -I../common -Istub -c -o $@ $<
+# the front-end's hiscores and battery RAM, FatFs being stdio here (stub/)
+obj/hiscore.o: ../common/hiscore.cpp ../common/hiscore.h
+	@mkdir -p obj
+	$(CXX) $(CXXFLAGS) -I../common -Istub -c -o $@ $<
 obj/%.o: $(CORE)/%.cpp $(CORE)/*.h $(CORE)/*.inc
 	@mkdir -p obj
 	$(CXX) $(CXXFLAGS) -DMUSASHI_CNF='"s16_m68kconf.h"' -DZ80_OPCODE_HOOK=s16_z80_opcode -c -o $@ $<

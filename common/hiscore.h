@@ -54,8 +54,10 @@ public:
 
 private:
 	enum { Off, Waiting, Active };
+	enum { GuardFrames = 600 };	// about 10 seconds, too short for a game to be played
 	const THiCore *m_pCore;
 	unsigned m_nState;
+	unsigned m_nGuard;		// frames left watching for the game's own set-up
 	size_t m_nSize;
 	u8 *m_pDefault;			// the game's own table (power-on)
 	u8 *m_pCard;			// what the .hi file holds

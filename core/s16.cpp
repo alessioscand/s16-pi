@@ -21,6 +21,12 @@ void s16_m68k_state_load (const void *pSrc);
 
 #include "s16_games.inc"
 
+// hiscores: MAME's hiscore.dat rows, main CPU addresses (first and last byte
+// say when the game has set its table up)
+struct TS16HiRow { u32 nAddr; u16 nSize; u8 nFirst, nLast; };
+struct TS16Hiscore { const char *pName; const TS16HiRow *pRows; int nRows; };
+#include "s16_hiscore.inc"
+
 // ---- clocks ------------------------------------------------------------------
 // System 16B: pixel clock 25.1748 MHz / 4, 400 pixel clocks per line, 262
 // lines: 60.05 Hz. System 18: 262 lines at 57.23 Hz (MAME: measured on a
@@ -1782,10 +1788,46 @@ int s16_state_load (const void *pBuffer, size_t nSize)
 	UpdateMapping ();
 	return 1;
 }
-size_t s16_hi_size (void)			{ return 0; }
-int s16_hi_ready (void)				{ return 0; }
-void s16_hi_get (u8 *)				{}
-void s16_hi_put (const u8 *)			{}
+
+// hiscores of the loaded set (none: 0), as MAME's hiscore plugin reads them
+static const TS16Hiscore *Hiscore (void)
+{
+	if (!s_pGame) return 0;
+	for (const TS16Hiscore &H : s_Hiscores)
+		if (strcmp (H.pName, s_pGame->pName) == 0) return &H;
+	return 0;
+}
+size_t s16_hi_size (void)
+{
+	const TS16Hiscore *pH = Hiscore ();
+	size_t n = 0;
+	for (int i = 0; pH && i < pH->nRows; i++) n += pH->pRows[i].nSize;
+	return n;
+}
+int s16_hi_ready (void)
+{
+	const TS16Hiscore *pH = Hiscore ();
+	if (!pH) return 0;
+	for (int i = 0; i < pH->nRows; i++)
+	{
+		const TS16HiRow &R = pH->pRows[i];
+		if (   m68k_read_memory_8 (R.nAddr) != R.nFirst
+		    || m68k_read_memory_8 (R.nAddr + R.nSize - 1) != R.nLast) return 0;
+	}
+	return 1;
+}
+void s16_hi_get (u8 *pDst)
+{
+	const TS16Hiscore *pH = Hiscore ();
+	for (int i = 0; pH && i < pH->nRows; i++)
+		for (u32 a = 0; a < pH->pRows[i].nSize; a++) *pDst++ = (u8) m68k_read_memory_8 (pH->pRows[i].nAddr + a);
+}
+void s16_hi_put (const u8 *pSrc)
+{
+	const TS16Hiscore *pH = Hiscore ();
+	for (int i = 0; pH && i < pH->nRows; i++)
+		for (u32 a = 0; a < pH->pRows[i].nSize; a++) m68k_write_memory_8 (pH->pRows[i].nAddr + a, *pSrc++);
+}
 
 // diagnostics for the harness
 u32 s16_main_pc (void)				{ return m68k_get_reg (0, M68K_REG_PC); }

@@ -1,3 +1,5 @@
+#include <vector>
+#include "hiscore.h"
 /*
  * s16-pi - Linux test harness: runs the core without the Pi
  *
@@ -123,6 +125,13 @@ int main (int argc, char **argv)
 	}
 	printf ("%s: %s\n", pSet, s16_game_desc (nGame));
 	s16_set_line_callback (Line, 0);
+	if (const char *pNv = getenv ("NVLOAD"))	// battery RAM, as the front-end loads it
+		if (FILE *fp = fopen (pNv, "rb")) { size_t n = fread (s16_nvram (), 1, s16_nvram_size (), fp); fclose (fp); printf ("nv: %zu bytes loaded\n", n); }
+	// HITEST=<file.hi>: hiscores as the front-end keeps them (common/hiscore.cpp)
+	static const THiCore HiCore = {s16_hi_size, s16_hi_ready, s16_hi_get, s16_hi_put};
+	static CHiscore Hiscore;
+	const char *pHiTest = getenv ("HITEST");
+	if (pHiTest) Hiscore.Start (&HiCore, pHiTest);
 	static int16_t Audio[8192];
 	FILE *pWav = bWav ? fopen ((Out + "/" + pSet + ".wav").c_str (), "wb") : 0;
 	uint32_t nWavBytes = 0;
@@ -165,6 +174,26 @@ int main (int argc, char **argv)
 			free (pState);
 		}
 		s16_run_frame ();
+		if (pHiTest)
+		{
+			if (getenv ("HIPOKE") && f == atoi (getenv ("HIPOKE")))	// a new score, as if played
+			{
+				std::vector<uint8_t> T (s16_hi_size ());
+				s16_hi_get (T.data ()); T[T.size () / 3] ^= 0x22; s16_hi_put (T.data ());
+			}
+			const TCardResult R = Hiscore.Tick ();
+			if (R != CardNothing) printf ("hiscores: ready at frame %d, %s\n", f, R == CardLoaded ? "loaded" : "none saved");
+			if (f == nFrames - 1) printf ("hiscores: %s\n", Hiscore.Save () == CardSaved ? "saved" : "not saved (unchanged)");
+		}
+		if (const char *pNv = getenv ("NVSAVE"))
+			if (f == nFrames - 1) { FILE *o = fopen (pNv, "wb"); fwrite (s16_nvram (), 1, s16_nvram_size (), o); fclose (o); }
+		if (const char *pEnd = getenv ("HIEND"))
+			if (f == nFrames - 1 && s16_hi_size ())
+			{
+				std::vector<uint8_t> T (s16_hi_size ());
+				s16_hi_get (T.data ());
+				FILE *o = fopen (pEnd, "wb"); fwrite (T.data (), 1, T.size (), o); fclose (o);
+			}
 		const int nAudio = s16_audio_read (Audio, 4096);
 		if (pWav)
 		{

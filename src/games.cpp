@@ -423,8 +423,8 @@ boolean CKernel::LoadGame (unsigned nIndex)
 	McEnable (m_bMultiCore);
 	LoadDips ();
 	s16_reset ();
-	HiStart ();
 	NvStart ();
+	HiStart ();		// after the battery RAM, which may hold a table
 
 	WriteTextFile (LAST_PATH, G.File);
 	return TRUE;

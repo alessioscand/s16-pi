@@ -32,6 +32,7 @@ static boolean WriteFile (const char *pPath, const u8 *pSrc, size_t nSize)
 CHiscore::CHiscore (void)
 :	m_pCore (0),
 	m_nState (Off),
+	m_nGuard (0),
 	m_nSize (0),
 	m_pDefault (0),
 	m_pCard (0),
@@ -80,13 +81,37 @@ void CHiscore::Stop (void)
 	m_nState = Off;
 }
 
-// puts the saved table in as soon as the game has set its own up
+// puts the saved table in as soon as the game has set its own up. The RAM may
+// hold a table already (battery RAM, a reset) that the game then sets up again
+// as it starts: for a while after, a new table of the game's gets the same
 TCardResult CHiscore::Tick (void)
 {
+	if (m_nState == Active && m_nGuard > 0)
+	{
+		m_nGuard--;
+		if (m_pCore->pReady ())
+		{
+			m_pCore->pGet (m_pNow);
+			if (memcmp (m_pNow, m_pCard, m_nSize) != 0)
+			{
+				memcpy (m_pDefault, m_pNow, m_nSize);
+				if (m_bCard)
+				{
+					m_pCore->pPut (m_pCard);
+				}
+				else
+				{
+					memcpy (m_pCard, m_pNow, m_nSize);
+				}
+			}
+		}
+		return CardNothing;
+	}
 	if (m_nState != Waiting || !m_pCore->pReady ())
 	{
 		return CardNothing;
 	}
+	m_nGuard = GuardFrames;
 	m_pCore->pGet (m_pDefault);
 	if (m_bCard)
 	{
