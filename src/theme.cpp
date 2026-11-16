@@ -54,7 +54,9 @@ const TUITheme g_Theme =
 	0x83B5C8, FALSE,			// the list's bottom row: dim, menu font
 	s_Logo, sizeof s_Logo / sizeof s_Logo[0], 1, s_LogoKeys, s_LogoColors,
 	s_Credits, sizeof s_Credits / sizeof s_Credits[0],
-	"SEGA IS A TRADEMARK", "OF ITS OWNER."
+	"SEGA IS A TRADEMARK", "OF ITS OWNER.",
+	{0, 0}, 0, 0,				// no frame: the grid's dither
+	{0, 0}
 };
 
 // the grid: petrol at 30%, a line every 16 pixels
