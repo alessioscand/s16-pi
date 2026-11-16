@@ -22,7 +22,7 @@ public release: 1.0.0.
   black around the picture and, at 1080p, the game's title, maker and year
   above it and its buttons below (`src/gametable.cpp`). The border is drawn
   once in both buffers when it changes. The status line (left column) and
-  the messages (right column) are in Area51 with a hard shadow, the same at
+  the messages (right column) are in Lander with a hard shadow, the same at
   720p and 1080p, drawn only when they change: prepared apart and copied a
   finished row at a time, so beam racing never shows them half cleared. The
   HVS enlarges at most 2x, so the text can have 2 screen pixels per font
