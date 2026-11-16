@@ -50,6 +50,8 @@ const TUITheme g_Theme =
 	0xFFFFFF, 0x46C8F0, 0x83B5C8,		// title, value, dim
 	0xE8213F,				// POWER OFF
 	g_FontYouSquared, g_FontCyberwire, TRUE,
+	g_FontYouSquared,			// around the picture
+	0x83B5C8, FALSE,			// the list's bottom row: dim, menu font
 	s_Logo, sizeof s_Logo / sizeof s_Logo[0], 1, s_LogoKeys, s_LogoColors,
 	s_Credits, sizeof s_Credits / sizeof s_Credits[0],
 	"SEGA IS A TRADEMARK", "OF ITS OWNER."
