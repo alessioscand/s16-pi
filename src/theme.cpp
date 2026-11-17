@@ -57,7 +57,8 @@ const TUITheme g_Theme =
 	{8, 0}, 0x2E5866, 24,			// a frame (1080p), the grid lit near it
 	{4, 2},					// the columns' text further out (720p: as far as LOAD 99% fits)
 	16,					// the grid through the frame's corners
-	FALSE					// thin lines
+	FALSE,					// thin lines (TRUE: a game pixel wide)
+	16					// 720p: whole squares, one clear around the picture
 };
 
 // the grid: petrol squares of 16 game pixels, lines a point wide (two at 720p
