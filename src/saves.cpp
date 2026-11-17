@@ -1,9 +1,6 @@
 /*
- * s16-pi - hiscores (core/s16_hiscore.inc, from MAME's hiscore.dat) in
- * saves/<game>.hi, and the battery-kept work RAM of every game in
- * saves/<game>.nv (Laser Ghost's gun adjustment too: without it the game
- * asks for the adjustment, which the game loop then does for the player).
- * The work itself is common/hiscore.cpp; here are the core and the log.
+ * s16-pi - hiscores (saves/<game>.hi) and battery RAM (saves/<game>.nv,
+ * Laser Ghost's gun adjustment too) through common/hiscore.cpp
  */
 #include "kernel.h"
 #include "mcline.h"

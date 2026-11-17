@@ -1,9 +1,6 @@
 /*
- * s16-pi - what the game list and the screen around the game show of each set:
- * a short title, the region under the list ("" = from MAME's name), year,
- * maker and the names of buttons A..F (none = not known: nothing is shown).
- * Written by hand, once: buttons from jtcores (mame2mra.toml) and
- * controls.dat (SirPoonga, Howard Casto), checked against the games.
+ * s16-pi - each set's title, region ("": from MAME's name), year, maker and
+ * buttons A..F (none: not shown); by hand, from jtcores and controls.dat
  */
 #include "gameinfo.h"
 

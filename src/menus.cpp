@@ -1,6 +1,5 @@
 /*
- * s16-pi - menus: the game list, OPTIONS, DIP SWITCHES, CONTROLS, power off,
- * credits
+ * s16-pi - menus: list, OPTIONS, DIP SWITCHES, CONTROLS, power off, credits
  */
 #include "kernel.h"
 #include "frame.h"
@@ -232,11 +231,9 @@ void CKernel::RunSystemMenu (void)
 	}
 }
 
-// DIP SWITCHES (in-game menu): the game's own switches, with MAME's names and
-// settings. A changes the selected one (left/right too), B goes back. They
-// reach the board at once; many games only read them when they start, hence
-// the note. Saved per game in saves/<game>.dip. The last row, CLEAR MEMORY,
-// asks the game loop to wipe the battery RAM (returns TRUE).
+// DIP SWITCHES: MAME's names; A or left/right changes, B back; applied at
+// once (many games read them at start); saved in saves/<game>.dip. CLEAR
+// MEMORY: returns TRUE (the game loop wipes the battery RAM)
 boolean CKernel::RunDipMenu (void)
 {
 	if (m_nLoaded < 0)
