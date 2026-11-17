@@ -1,5 +1,5 @@
 /*
- * s16-pi - the per-minute report in LOG.TXT
+ * The per-minute report in LOG.TXT (CKernel: the project's kernel.h)
  */
 #include "kernel.h"
 #include "frame.h"
