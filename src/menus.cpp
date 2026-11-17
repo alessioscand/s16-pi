@@ -335,7 +335,9 @@ boolean CKernel::RunDipMenu (void)
 		Items[nItems].pValue = 0;
 		Items[nItems].bDisabled = FALSE;
 
-		const char *pLocation = "";
+		// under the panel: the switch's place, or what CLEAR MEMORY clears
+		// (always a line: the panel keeps its height)
+		const char *pLocation = "BATTERY RAM";
 		if (nSel < nItems)
 		{
 			TS16Dip S;
