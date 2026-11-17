@@ -20,6 +20,11 @@
 #define PROJECT_TV_IN_BYTES	(320 * 4)
 #define PROJECT_TV_OUT_W	749
 
+/* Audio queue (common/audio.cpp): ~1 video frame (~17 ms) instead of 2,
+   less audio lag; the sound runs a slice at a time in each line */
+#define PROJECT_AUDIO_TARGET	800
+#define PROJECT_AUDIO_BAND	200
+
 /* Players: one pad each (common/input) */
 #define PROJECT_PLAYERS	4
 
