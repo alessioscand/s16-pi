@@ -8,9 +8,10 @@ public release: 1.0.0.
 
 - **Front-end**: m92-pi's, adapted to the System 16 picture (320x224, 262
   lines, the frame starts at line 224 with the vertical blank). `common/`
-  is shared with the three other projects; `hiscore.cpp/.h` (hiscores and
-  battery RAM, from m92-pi's front-end) are new here, the others take them
-  at their next release.
+  is the same as in m92-pi and neo-pi (nes-pi does not use it yet). The
+  audio queue is one video frame (`PROJECT_AUDIO_TARGET` in
+  `src/project.h`): ~17 ms of audio lag, as m92-pi, since the sound runs
+  a slice at a time in each line.
 - **Menus**: `common/ui.cpp`, the same layout as m92-pi and neo-pi (304x224
   in the middle of the picture), with s16-pi's look from `src/theme.cpp`:
   petrol grid, dark panels with an ice-white frame, crimson band; Cyberwire
@@ -19,8 +20,10 @@ public release: 1.0.0.
   GRID, TEXT or OFF (`bezel=full`, `grid`, `text` or `off` in `s16pi.cfg`).
   With GRID and FULL the grid fills the screen behind the menus too, with
   TEXT and OFF they are on black. Around a game: the grid (at 1080p with a
-  thin frame) or black and, with TEXT and FULL at 1080p, the game's title,
-  maker and year above it and its buttons below (`src/gametable.cpp`). The
+  thin frame; at 720p, without a frame, whole squares and one clear colour
+  around the picture: the theme's `nSquare`) or black and, with TEXT and
+  FULL at 1080p, the game's title, maker and year above it and its buttons
+  below (`src/gametable.cpp`). The
   border is drawn once in both buffers when it changes. The status line (left column) and
   the messages (right column) are in You Squared with a hard shadow, the
   same at 720p and 1080p, drawn only when they change: prepared apart and copied a
@@ -106,6 +109,9 @@ public release: 1.0.0.
 
 1. The vertical games (Passing Shot, Time Scanner, Action Fighter,
    Desert Breaker ...).
+2. System 16A (`segas16a.cpp`, sound with the 7751): the first Shinobi
+   set, whose zip sets 2, 3 and 5 already need for their sprites.
+3. System 16C (Fantasy Zone II).
 
 ## Layout
 
