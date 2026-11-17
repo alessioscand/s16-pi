@@ -170,9 +170,11 @@ static void LayerLine (const TS16Video *pV, int nWhich, int y, u16 *pLine)
 	for (int x = 0; x < S16_WIDTH; x++)
 	{
 		const unsigned nVX = (nX0 + (unsigned) x) & 0x3ff;
-		if (bColumns && !bAlt && ((x + 8) & 15) == 0)
+		// a column's y scroll applies one pixel early (as jotego's jts16:
+		// no stray line in D.D. Crew's intro, MAME bug 00997)
+		if (bColumns && !bAlt && ((x + 9) & 15) == 0)
 		{
-			nVY = (unsigned) (y + pText[0xf16 / 2 + 0x20 * nWhich + (x + 8) / 16]) & 0x1ff;
+			nVY = (unsigned) (y + pText[0xf16 / 2 + 0x20 * nWhich + (x + 9) / 16]) & 0x1ff;
 			nTileX = ~0u;
 		}
 		else if (bColumns && !bAlt && x == 0)
