@@ -15,13 +15,13 @@ public release: 1.0.0.
   in the middle of the picture), with s16-pi's look from `src/theme.cpp`:
   petrol grid, dark panels with an ice-white frame, crimson band; Cyberwire
   for the game list, You Squared for the rest. Long titles scroll in the list.
-- **Bezel** (`common/video.cpp`): with no game loaded (start, loading, list,
-  OPTIONS) the grid fills the whole screen, the menus drawn without a
-  filter so they are one with the border. With a game, OPTIONS > BEZEL
-  (`bezel=gridinfo`, `grid`, `info` or `off` in `s16pi.cfg`): the grid or
-  black around the picture and, at 1080p, the game's title, maker and year
-  above it and its buttons below (`src/gametable.cpp`). The border is drawn
-  once in both buffers when it changes. The status line (left column) and
+- **Bezel** (`common/video.cpp`): OPTIONS > BEZEL is the background, FULL,
+  GRID, TEXT or OFF (`bezel=full`, `grid`, `text` or `off` in `s16pi.cfg`).
+  With GRID and FULL the grid fills the screen behind the menus too, with
+  TEXT and OFF they are on black. Around a game: the grid (at 1080p with a
+  thin frame) or black and, with TEXT and FULL at 1080p, the game's title,
+  maker and year above it and its buttons below (`src/gametable.cpp`). The
+  border is drawn once in both buffers when it changes. The status line (left column) and
   the messages (right column) are in You Squared with a hard shadow, the
   same at 720p and 1080p, drawn only when they change: prepared apart and copied a
   finished row at a time, so beam racing never shows them half cleared. The
