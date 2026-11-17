@@ -65,7 +65,10 @@ public release: 1.0.0.
   from MAME's `segas16b.cpp` and `segas18.cpp`:
   80 sets (57 System 16B, 23 System 18) with their ROMs, hardware, DIP
   switches and what each input bit is (and the bits that change with a
-  DIP switch, as Moonwalker's coin chutes). Left out (the script says why
+  DIP switch, as Moonwalker's coin chutes). DIP names and values are
+  shortened in `nice()` so that name and longest value fit in 24
+  characters (25 with the gap); `fit()` warns about any that does not.
+  Left out (the script says why
   for each): bootlegs and Korean boards, sets not working in MAME, System
   16C, controls a pad does not have (trackball, dial, analog stick,
   mahjong, two sticks, Where's Wally's light gun) and, for

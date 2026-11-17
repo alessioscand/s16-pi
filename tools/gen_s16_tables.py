@@ -182,7 +182,35 @@ def nice(s):
     s = re.sub(r'^(\d) Coins?/(\d) Credits? (\d)/(\d) (\d)/(\d) (\d)/(\d)$', r'\1/\2 \3/\4 \5/\6 \7/\8', s)
     s = re.sub(r'^(\d) Coins?/(\d) Credits? (\d)/(\d) (\d)/(\d)$', r'\1/\2 \3/\4 \5/\6', s)
     s = re.sub(r'^(\d) Coins?/(\d) Credits? (\d)/(\d)$', r'\1/\2 \3/\4', s)
+    s = re.sub(r'^(\d) Coins?/(\d) Credits?', r'\1C/\2Cr', s)
+    s = re.sub(r'^(\d) Credits? (\d+) Outcounts (\d+) Min\.$', r'\1Cr \2 Outs \3M', s)
+    s = re.sub(r'^(\d)Credits? (\d+) Outcounts (\d+)M\./(\d)Credits? (\d+) Outcounts (\d+)M\.$',
+               r'\1Cr\2/\3M \4Cr\5/\6M', s)
+    s = re.sub(r'^(\d) Credits? (\d) (Innings?)$', r'\1 Cr \2 \3', s)
+    s = re.sub(r'^(\d) to start, (\d) to continue$', r'\1 Start, \2 Cont.', s)
+    s = SHORT.get(s, s)
     return s.replace('_', ' ')
+
+SHORT = {
+    'Game Time P1': 'Time P1', 'Game Time P2': 'Time P2', 'Credits needed': 'Credits',
+    'Attack Button to Start': 'Attack To Start', 'Omikuji Difficulty': 'Omikuji Level',
+}
+
+# name and longest value in at most 24 characters (25 fit, one is the gap)
+FIT = 24
+
+def fit(name, values):
+    if name == 'Bonus Life' and len(name) + max(map(len, values)) > FIT:
+        name = 'Bonus'
+    if len(name) + max(map(len, values)) > FIT:
+        sys.stderr.write('too long: %s\n' % name)
+    return name
+
+def setting(name, value):
+    # Credits To Start: just the number
+    if name == 'Credits To Start':
+        return re.sub(r'^(\d) Credits?$', r'\1', value)
+    return value
 
 def cstr(s):
     return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
@@ -377,7 +405,7 @@ for inp, system in sorted({(g['inp'], g['system']) for g in games}):
     w('static const TS16DipSetting dipset_%s[] =\n{' % inp)
     for shift, d in dips:
         for v, n in d['settings']:
-            w('\t{0x%04x, %s},' % (v << shift, cstr(nice(n))))
+            w('\t{0x%04x, %s},' % (v << shift, cstr(setting(nice(d['name']), nice(n)))))
     w('\t{0, 0}\n};')
     w('static const TS16DipDef dips_%s[] =\n{' % inp)
     idx = 0
@@ -386,7 +414,7 @@ for inp, system in sorted({(g['inp'], g['system']) for g in games}):
         if cond:
             raise SystemExit('a condition on a DIP switch (%s): the port it reads must be worked out' % inp)
         w('\t{0x%04x, 0x%04x, %s, %s, %d, %d},' % (
-            d['mask'] << shift, d['default'] << shift, cstr(nice(d['name'])), cstr(d['loc']), idx, len(d['settings'])))
+            d['mask'] << shift, d['default'] << shift, cstr(fit(nice(d['name']), [setting(nice(d['name']), nice(n)) for v, n in d['settings']])), cstr(d['loc']), idx, len(d['settings'])))
         idx += len(d['settings'])
     w('\t{0, 0, 0, 0, 0, 0}\n};')
     dsw = 0xffff
