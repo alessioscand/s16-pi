@@ -13,9 +13,9 @@ s16-pi 1.0.0 - Bare-metal SEGA System 16 emulator for Raspberry Pi 3 and 4
   - Scanlines (light, medium, strong) and a COMPOSITE filter that looks
     like an old TV.
   - Up to 4 players, save state, the games' own DIP switches.
-  - Around the picture: the menus' grid, with the game's title, maker
-    and year and what its buttons do (at 1080p). OPTIONS > BEZEL:
-    GRID+INFO, GRID, INFO (on black) or OFF.
+  - Around the picture: the menus' grid and a thin frame, with the
+    game's title, maker and year and what its buttons do (at 1080p).
+    OPTIONS > BEZEL: FULL, GRID, TEXT (on black) or OFF.
   - Hiscores are saved in s16pi/saves/<game>.hi (57 sets, as MAME's
     hiscore plugin).
   - Each game's battery-kept RAM (settings, bookkeeping, and the scores
@@ -130,11 +130,12 @@ OPTIONS MENU (D in the game list, or from the in-game menu)
                 added lag. On a Pi 3 the scanlines and COMPOSITE need
                 multicore: with multicore=off this item shows MULTICORE
                 OFF.
-  BEZEL         Around the picture while playing. GRID+INFO (default):
-                the grid, and at 1080p the game's title, maker and year
-                above the picture and what its buttons do below. GRID: the
-                grid only. INFO: the texts on black. OFF: black. In
-                s16pi.cfg: bezel=gridinfo, grid, info or off.
+  BEZEL         The background. FULL (default): the grid, and while
+                playing at 1080p the game's title, maker and year above
+                the picture and what its buttons do below. GRID: the grid
+                only. TEXT: the texts on black. OFF: black. With TEXT and
+                OFF the menus are on black too. In s16pi.cfg: bezel=full,
+                grid, text or off.
   CONTROLS      Set up a pad (with several pads, press a button on the one
                 to set up).
   POWER OFF     As in the in-game menu.

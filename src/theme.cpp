@@ -54,16 +54,22 @@ const TUITheme g_Theme =
 	0x83B5C8, FALSE,			// the list's bottom row: dim, menu font
 	s_Logo, sizeof s_Logo / sizeof s_Logo[0], 1, s_LogoKeys, s_LogoColors,
 	s_Credits, sizeof s_Credits / sizeof s_Credits[0],
-	"SEGA IS A TRADEMARK", "OF ITS OWNER.",
-	{0, 0}, 0, 0,				// no frame: the grid's dither
-	{0, 0}
+	{8, 0}, 0x2E5866, 24,			// a frame (1080p), the grid lit near it
+	{4, 2},					// the columns' text further out (720p: as far as LOAD 99% fits)
+	16,					// the grid through the frame's corners
+	FALSE					// thin lines
 };
 
-// the grid: petrol at 30%, a line every 16 pixels
-u32 ThemeGrid (int x, int y)
+// the grid: petrol squares of 16 game pixels, lines a point wide (two at 720p
+// if thin), through the frame's corners (at 720p, with no frame, through the
+// screen's centre)
+u32 ThemeGrid (int x, int y, int M, int nHalfW, int nHalfH)
 {
-	// lines every 16 game pixels, half a cell from the centre
-	return x % 16 == 8 || y % 16 == 8 ? 0x041F27 : 0x011921;
+	(void) nHalfW;				// no dots: nothing to leave out at the edges
+	(void) nHalfH;
+	const int P = 16 * M, t = (M + 1) / 2;
+	const int mx = (x + P * 64) % P, my = (y + P * 64) % P;
+	return mx < t || my < t ? 0x0A3A46 : 0x011921;
 }
 
 u32 ThemeGround (void)

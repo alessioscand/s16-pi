@@ -87,8 +87,13 @@ private:
 		       unsigned nTextScale, const CCharGenerator &Font);
 	// the border
 	struct TTarget { u32 *pBase; unsigned nPitch, nW, nH; };	// where text goes
-	void GridAt (unsigned x, unsigned y, int *pGX, int *pGY) const;
+	void BgPoint (unsigned *pX, unsigned *pY) const;
+	int GameDistance (unsigned x, unsigned y, int *pGX, int *pGY) const;
+	u32 ToFb (u32 c) const;					// 0xRRGGBB -> framebuffer
+	u32 GridColour (unsigned x, unsigned y) const;		// 0xRRGGBB
 	u32 GridPixel (unsigned x, unsigned y) const;		// framebuffer order
+	u32 FramePixel (unsigned x, unsigned y, int d) const;
+	u32 DitherPixel (unsigned x, unsigned y, int d, int gx, int gy) const;
 	u32 BgPixel (unsigned x, unsigned y) const;		// framebuffer order
 	void FillBorder (unsigned nBuf);
 	void DrawInfoLines (unsigned nBuf);
@@ -121,7 +126,13 @@ private:
 	boolean	 m_bBands;			// room for the title and the buttons
 	unsigned m_nGap;			// text from the picture and the screen edge
 	unsigned m_nSideGap;			// the columns' text from the picture
+	unsigned m_nBgK;			// the background's points: framebuffer
+	unsigned m_nBgM;			// pixels each (1, or m_nM with bPixel),
+						// points to a game pixel (m_nM, or 1)
 	int	 m_nFrame;			// the theme's frame, game pixels (0: none)
+	int	 m_nFrameR, m_nFrameB;		// its lines, background points from the
+	int	 m_nFrameL, m_nFrameT;		// screen's centre (left, top: minus)
+	int	 m_nGridX0, m_nGridY0;		// where ThemeGrid counts from
 	unsigned m_nColTop, m_nColBot;		// the columns' text: between these lines
 
 	// the border
