@@ -1,6 +1,9 @@
 /*
- * s16-pi - the System 16B and System 18 machines (see s16.h)
+ * s16-pi - the System 16A, 16B (16C: with more work RAM) and System 18
+ * machines (see s16.h)
  *
+ * System 16A: as MAME's segas16a.cpp (Aaron Giles): a fixed map, an 8255 for
+ * the sound latch and video control, the 7751 sample player (n7751.cpp).
  * System 18: as MAME's segas18.cpp (Aaron Giles): the same 315-5195 mapper
  * with its own regions, the 315-5296 I/O chip, the VDP (s18_vdp.cpp) and its
  * own sound board (s18_sound.cpp).
@@ -8,6 +11,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "s16.h"
+#include "n7751.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -35,8 +39,9 @@ struct TS16Hiscore { const char *pName; const TS16HiRow *pRows; int nRows; };
 // (System 18: 8 MHz), 8751 at 8 MHz / 12.
 #define LINE_HZ_16B	(25174800.0 / 4 / 400)
 #define LINE_HZ_18	(57.23 * 262)
+#define LINE_HZ_16A	(60.0 * 262)		// (as MAME, to be verified)
 #define FIX(hz, line)	((u32) ((hz) / (line) * 65536.0 + 0.5))
-static u32 s_nMainPerLine, s_nSoundPerLine, s_nMcuPerLine;
+static u32 s_nMainPerLine, s_nSoundPerLine, s_nMcuPerLine, s_n7751PerLine;
 #define SLICES		8		// the CPUs take turns this many times per line
 
 // ---- the machine's state -----------------------------------------------------
@@ -45,6 +50,7 @@ static const TS16Game *s_pGame;
 static u8 *s_pRegion[RGN_COUNT];
 static bool s_bLoaded;
 static bool s_bS18;
+static bool s_bS16A;
 
 static struct TMachine
 {
@@ -54,7 +60,7 @@ static struct TMachine
 	u8 nToSound, nFromSound;
 	bool bSoundIrq;
 	bool bMainReset;		// the mapper holds the 68000 in reset
-	s32 nMainFrac, nSoundFrac, nMcuFrac;	// cycles each CPU is owed, 16.16 (negative: it ran ahead)
+	s32 nMainFrac, nSoundFrac, nMcuFrac, n7751Frac;	// cycles each CPU is owed, 16.16 (negative: it ran ahead)
 	int nMainStall;			// 68000 cycles to lose (see McuPortWrite)
 	u32 nSoundBank;			// offset in the sound region
 	u8 nFdState;			// FD1094: the state the program chose,
@@ -74,11 +80,22 @@ static struct TMachine
 	u8 nAdcShift;			// the converted value, shifted out a bit at a time
 	u8 nAdcSelect;			// channels 2 and 3: gun 2 (0) or gun 3 (1)
 	u8 nRecoil;			// the guns' recoil solenoids now on (bits 0-2)
+	// System 16A: the 8255 (port A: sound latch, B: video control, C: scroll
+	// modes and the Z80's NMI) and the 7751's command
+	u8 nPpiCtrl, PpiOut[3];
+	bool bPpiObf, bPpiIbf, bPpiInte, bPpiInte1, bPpiInte2, bPpiIntr;
+	u8 nPpiPC;			// what port C outputs now
+	u8 n7751Cmd;
+	u32 n7751Addr;
+	u8 nMcuControl;			// System 16A: the 8751's port 1
 } M;
 static unsigned s_nRecoils[3];		// times each recoil came on
 static TS16Video V;
 static z80 s_Z80;
 static i8751_cpu s_Mcu;
+static TN7751 s_N7751;
+static u8 *s_pBigWork;			// System 16C: its 256 KB of work RAM (else 0)
+static inline u8 *WorkRam (void)	{ return s_pBigWork ? s_pBigWork : M.WorkRam; }
 
 // the front-end's hooks
 static TS16LineCB *s_pLineCB;		static void *s_pLineCtx;
@@ -92,7 +109,7 @@ static inline void VideoSync (void)	{ if (s_pSync) s_pSync (s_pSyncCtx); }
 // The 315-5195 places 8 regions anywhere in the 16 MB space; whatever is left
 // reads and writes the mapper's own registers. One entry per 64 KB.
 
-enum { K_MAPPER, K_ROM, K_WORK, K_SPRITE, K_PALETTE, K_TILE, K_TEXT, K_IO, K_BANK, K_MATH, K_COMPARE, K_VDP };
+enum { K_MAPPER, K_ROM, K_WORK, K_SPRITE, K_PALETTE, K_TILE, K_TEXT, K_IO, K_BANK, K_MATH, K_COMPARE, K_VDP, K_OPEN };
 // pRead: what the 68000 reads there; pOpcodes: what it fetches as opcodes (the
 // same, without an encrypted CPU). A null pointer on a ROM page: not decrypted
 // yet (see the encrypted CPUs below). bBankWrite: a write to this ROM sets the
@@ -141,6 +158,8 @@ static void MapTiles (u32 nBase, u32 nSizeMask)
 		}
 	}
 }
+
+static void UpdateMapping16A (void);
 
 // as segas18_state::memory_mapper
 static void UpdateMapping18 (void)
@@ -201,6 +220,11 @@ static void UpdateMapping (void)
 		UpdateMapping18 ();
 		return;
 	}
+	if (s_bS16A)
+	{
+		UpdateMapping16A ();
+		return;
+	}
 	const u8 *pRom = s_pRegion[RGN_MAIN];
 	const bool bSmall = s_pGame->nBoard == BOARD_5358_SMALL, b5358 = bSmall || s_pGame->nBoard == BOARD_5358;
 	const bool b5797 = s_pGame->nBoard == BOARD_5797;
@@ -214,7 +238,7 @@ static void UpdateMapping (void)
 		case 6: MapPages (nBase, nSizeMask, K_PALETTE, 0x0fff, 0, 0, 0); break;
 		case 5: MapTiles (nBase, nSizeMask); break;
 		case 4: MapPages (nBase, nSizeMask, K_SPRITE, 0x07ff, 0, 0, 0); break;
-		case 3: MapPages (nBase, nSizeMask, K_WORK, 0x3fff, M.WorkRam, 0, 0); break;
+		case 3: MapPages (nBase, nSizeMask, K_WORK, s_pBigWork ? 0x3ffff : 0x3fff, WorkRam (), 0, 0); break;
 		case 2:
 			if (b5358)	MapPages (nBase, nSizeMask, K_ROM, 0xffff, pRom, 0x20000, bSmall ? 0x20000 : 0x40000);
 			else if (b5797)	MapPages (nBase, nSizeMask, K_COMPARE, 0, 0, 0, 0);
@@ -229,6 +253,25 @@ static void UpdateMapping (void)
 			MapPages (nBase, nSizeMask, K_ROM, 0xffff, pRom, b5358 ? 0x20000 : b5797 ? 0x80000 : 0x40000, 0);
 			break;
 		}
+	}
+}
+
+// System 16A: a fixed map (segas16a_state::system16a_map), with its mirrors
+static void UpdateMapping16A (void)
+{
+	const u8 *pRom = s_pRegion[RGN_MAIN];
+	for (unsigned p = 0; p < 256; p++)
+	{
+		const u32 a = p << 16;
+		s_Page[p].nKind = K_OPEN;
+		if ((p & ~0x38u) < 0x04)		MapPages (a, 0xffff, K_ROM, 0xffff, pRom, 0x40000, a & 0x30000);
+		if ((p & ~0xb8u) == 0x40)		MapPages (a, 0xffff, K_TILE, 0x7fff, 0, 0, 0);
+		if ((p & ~0xb8u) == 0x41)		MapPages (a, 0xffff, K_TEXT, 0x0fff, 0, 0, 0);
+		if ((p & ~0x3bu) == 0x44)		MapPages (a, 0xffff, K_SPRITE, 0x07ff, 0, 0, 0);
+		if ((p & ~0x3bu) == 0x84)		MapPages (a, 0xffff, K_PALETTE, 0x0fff, 0, 0, 0);
+		if ((p & ~0x39u) == 0xc4)		MapPages (a, 0xffff, K_IO, 0x3fff, 0, 0, 0);
+		if (p == 0xc6)				MapPages (a, 0xffff, K_OPEN, 0, 0, 0, 0);	// (the watchdog)
+		if ((p & ~0x38u) == 0xc7)		MapPages (a, 0xffff, K_WORK, 0x3fff, M.WorkRam, 0, 0);
 	}
 }
 
@@ -470,6 +513,197 @@ static void IoWrite (u32 nOffset, u16 nData)
 			VideoSync ();
 			V.bDisplay = bDisplay;
 		}
+	}
+}
+
+// ---- System 16A: the 8255 -------------------------------------------------------
+// As MAME's i8255 in modes 0 and 1 (port A as output with handshake, as the
+// games set it up). Port A is the sound latch; port B: bit 4 the display, bit
+// 6 the 8751's /INT1; port C: bit 7 (/OBF) the Z80's NMI (on while 0), bits 1
+// and 2 row and column scroll (on while 0).
+
+static int PpiModeA (void)	{ return (M.nPpiCtrl & 0x40) ? 2 : (M.nPpiCtrl & 0x20) ? 1 : 0; }
+static bool PpiAOut (void)	{ return !(M.nPpiCtrl & 0x10); }
+
+static void Mcu16AInt (bool bOn);
+
+static void PpiPortB (u8 d)
+{
+	const bool bDisplay = (d & 0x10) != 0;
+	if (bDisplay != V.bDisplay)
+	{
+		VideoSync ();
+		V.bDisplay = bDisplay;
+	}
+	Mcu16AInt (!(d & 0x40));
+}
+
+static void PpiPortC (u8 d)
+{
+	const bool bCol = !(d & 0x04), bRow = !(d & 0x02);
+	if (bCol != V.bColScroll || bRow != V.bRowScroll)
+	{
+		VideoSync ();
+		V.bColScroll = bCol;
+		V.bRowScroll = bRow;
+	}
+	if ((M.nPpiPC & 0x80) && !(d & 0x80))
+	{
+		z80_pulse_nmi (&s_Z80);		// /OBF going low
+	}
+	M.nPpiPC = d;
+}
+
+// as i8255_device::output_pc
+static void PpiOutputC (void)
+{
+	u8 d = 0, nMask = 0, nLower = 0x0f;
+	switch (PpiModeA ())
+	{
+	case 0:
+		if (!(M.nPpiCtrl & 0x08)) nMask |= 0xf0;
+		break;
+	case 1:
+		d |= M.bPpiIntr ? 0x08 : 0;
+		if (PpiAOut ())	{ d |= M.bPpiObf ? 0x80 : 0; nMask |= 0x30; }
+		else		{ d |= M.bPpiIbf ? 0x20 : 0; nMask |= 0xc0; }
+		break;
+	case 2:
+		nLower = 0x07;
+		d |= M.bPpiIntr ? 0x08 : 0;
+		d |= M.bPpiIbf ? 0x20 : 0;
+		d |= M.bPpiObf ? 0x80 : 0;
+		break;
+	}
+	if (!(M.nPpiCtrl & 0x04) && !(M.nPpiCtrl & 0x01))
+	{
+		nMask |= nLower;
+	}
+	PpiPortC ((u8) (d | (M.PpiOut[2] & nMask)));
+}
+
+// as i8255_device::check_interrupt (port A)
+static void PpiIntr (void)
+{
+	if (PpiModeA () == 1)
+	{
+		M.bPpiIntr = PpiAOut () ? (M.bPpiInte && M.bPpiObf) : (M.bPpiInte && M.bPpiIbf);
+	}
+	else if (PpiModeA () == 2)
+	{
+		M.bPpiIntr = (M.bPpiInte1 && M.bPpiObf) || (M.bPpiInte2 && M.bPpiIbf);
+	}
+}
+
+static void PpiWrite (unsigned nPort, u8 d)
+{
+	switch (nPort & 3)
+	{
+	case 0:
+		if (PpiModeA () == 2 || PpiAOut ())
+		{
+			M.PpiOut[0] = M.nToSound = d;
+			if (PpiModeA () != 0)
+			{
+				M.bPpiObf = false;
+				M.bPpiIntr = false;
+			}
+		}
+		break;
+	case 1:
+		if (!(M.nPpiCtrl & 0x02))
+		{
+			M.PpiOut[1] = d;
+			PpiPortB (d);
+		}
+		break;
+	case 2:
+		M.PpiOut[2] = d;
+		break;
+	case 3:
+		if (d & 0x80)			// mode set, as i8255_device::set_mode
+		{
+			M.nPpiCtrl = d;
+			M.PpiOut[0] = M.PpiOut[1] = M.PpiOut[2] = 0;
+			M.bPpiObf = true;
+			M.bPpiIbf = PpiAOut ();
+			M.bPpiInte = M.bPpiInte1 = M.bPpiInte2 = false;
+			if (PpiAOut ()) M.nToSound = 0;
+			PpiPortB (0);
+		}
+		else				// a bit of port C, as i8255_device::set_pc_bit
+		{
+			const unsigned nBit = (d >> 1) & 7;
+			const bool bState = d & 1;
+			M.PpiOut[2] = (u8) ((M.PpiOut[2] & ~(1u << nBit)) | (unsigned) bState << nBit);
+			if (PpiModeA () == 1)
+			{
+				if (nBit == 3) M.bPpiIntr = bState;
+				else if (nBit == (PpiAOut () ? 6u : 4u)) M.bPpiInte = bState;
+				else if (nBit == (PpiAOut () ? 7u : 5u)) { if (PpiAOut ()) M.bPpiObf = bState; else M.bPpiIbf = bState; }
+				if (nBit != 3) PpiIntr ();
+			}
+			else if (PpiModeA () == 2)
+			{
+				if (nBit == 3) M.bPpiIntr = bState;
+				else if (nBit == 4) M.bPpiInte2 = bState;
+				else if (nBit == 5) M.bPpiIbf = bState;
+				else if (nBit == 6) M.bPpiInte1 = bState;
+				else if (nBit == 7) M.bPpiObf = bState;
+				if (nBit != 3) PpiIntr ();
+			}
+		}
+		break;
+	}
+	PpiOutputC ();
+}
+
+static u8 PpiRead (unsigned nPort)
+{
+	switch (nPort & 3)
+	{
+	case 0: return PpiAOut () && PpiModeA () != 2 ? M.PpiOut[0] : 0;
+	case 1: return (M.nPpiCtrl & 0x02) ? 0 : M.PpiOut[1];
+	case 2: return M.nPpiPC;
+	default: return 0xff;
+	}
+}
+
+// the Z80 reads the latch: /ACK (as i8255_device::pc6_w), which ends /OBF
+static u8 PpiAck (void)
+{
+	if ((PpiModeA () == 2 || (PpiModeA () == 1 && PpiAOut ())) && !M.bPpiObf)
+	{
+		M.bPpiObf = true;
+		PpiIntr ();
+		PpiOutputC ();
+	}
+	return M.nToSound;
+}
+
+// as segas16a_state::standard_io_r / _w: 8255, inputs, DIP switches (SW2 at
+// the odd word, unlike System 16B)
+static u16 IoRead16A (u32 nOffset)
+{
+	nOffset &= 0x1fff;
+	switch (nOffset & (0x3000 / 2))
+	{
+	case 0x0000 / 2:
+		return PpiRead (nOffset & 3);
+	case 0x1000 / 2:
+		return InputPort (nOffset & 3);
+	case 0x2000 / 2:
+		return (nOffset & 1) ? (M.nDsw >> 8) : (M.nDsw & 0xff);
+	}
+	return 0xffff;
+}
+
+static void IoWrite16A (u32 nOffset, u8 nData)
+{
+	nOffset &= 0x1fff;
+	if ((nOffset & (0x3000 / 2)) == 0)
+	{
+		PpiWrite (nOffset & 3, nData);
 	}
 }
 
@@ -742,8 +976,8 @@ int s16_gun_adjust (int t, uint8_t Fire[3])
 // The work RAM, which a battery keeps on the System 16B and 18 boards (MAME
 // saves it as the NVRAM of all of them): settings, bookkeeping, the hiscores
 // of the games that keep them there, Laser Ghost's gun adjustment
-size_t s16_nvram_size (void)	{ return s_bLoaded ? sizeof M.WorkRam : 0; }
-uint8_t *s16_nvram (void)	{ return M.WorkRam; }
+size_t s16_nvram_size (void)	{ return s_bLoaded ? (s_pBigWork ? 0x40000 : sizeof M.WorkRam) : 0; }
+uint8_t *s16_nvram (void)	{ return WorkRam (); }
 
 static u16 IoRead18 (u32 nOffset)
 {
@@ -955,9 +1189,10 @@ static u16 MainRead16 (u32 a)
 	case K_WORK: { const u8 *p = P.pRead + (a & P.nMask & ~1u); return (u16) (p[0] << 8 | p[1]); }
 	case K_SPRITE:	return V.SprRam[(a & 0x7ff) >> 1];
 	case K_PALETTE:	return V.PalRam[(a & 0xfff) >> 1];
-	case K_TILE:	return V.TileRam[(a & 0xffff) >> 1];
+	case K_TILE:	return V.TileRam[(a & P.nMask) >> 1];
 	case K_TEXT:	return V.TextRam[(a & 0xfff) >> 1];
-	case K_IO:	return s_bS18 ? IoRead18 ((a & 0x3fff) >> 1) : IoRead ((a & 0x3fff) >> 1);
+	case K_IO:	return s_bS18 ? IoRead18 ((a & 0x3fff) >> 1) : s_bS16A ? IoRead16A ((a & 0x3fff) >> 1) : IoRead ((a & 0x3fff) >> 1);
+	case K_OPEN:	return 0xffff;
 	case K_VDP:	return VdpRead (a);
 	case K_MATH:	return MathRead ((a & 0x3fff) >> 1);
 	case K_COMPARE:	return CompareRead (M.Compare[1], (a & 0xffff) >> 1);
@@ -971,7 +1206,7 @@ static void MainWrite16 (u32 a, u16 d, u16 nMask)
 	switch (P.nKind)
 	{
 	case K_WORK: {
-		u8 *p = M.WorkRam + (a & 0x3ffe);
+		u8 *p = WorkRam () + (a & P.nMask & ~1u);
 		if (nMask & 0xff00) p[0] = (u8) (d >> 8);
 		if (nMask & 0x00ff) p[1] = (u8) d;
 		break; }
@@ -990,7 +1225,7 @@ static void MainWrite16 (u32 a, u16 d, u16 nMask)
 		}
 		break; }
 	case K_TILE: {
-		u16 &r = V.TileRam[(a & 0xffff) >> 1];
+		u16 &r = V.TileRam[(a & P.nMask) >> 1];
 		const u16 n = (u16) ((r & ~nMask) | (d & nMask));
 		if (n != r) { VideoSync (); r = n; }
 		break; }
@@ -1000,8 +1235,9 @@ static void MainWrite16 (u32 a, u16 d, u16 nMask)
 		if (n != r) { VideoSync (); r = n; }
 		break; }
 	case K_IO:
-		if (s_bS18)	IoWrite18 ((a & 0x3fff) >> 1, d, nMask);
-		else		IoWrite ((a & 0x3fff) >> 1, d);
+		if (s_bS18)		IoWrite18 ((a & 0x3fff) >> 1, d, nMask);
+		else if (s_bS16A)	{ if (nMask & 0x00ff) IoWrite16A ((a & 0x3fff) >> 1, (u8) d); }
+		else			IoWrite ((a & 0x3fff) >> 1, d);
 		break;
 	case K_VDP:	VdpWrite (a, d, nMask); break;
 	case K_BANK:			// 171-5521 / 5704: the two tile banks
@@ -1158,6 +1394,112 @@ static void McuPortWrite (void *, int nPort, u8)
 	}
 }
 
+// ---- System 16A: the 7751's command, the 8751's interrupt ----------------------------
+
+// as segas16a_state::n7751_command_w: bits 7-5 the command, bits 4-1 the
+// ROM selects, bit 0 address line 14
+static void N7751Command (u8 d)
+{
+	const u32 nRoms = s_pGame->RegionSize[RGN_N7751DATA] / 0x8000;
+	u32 a = (M.n7751Addr & 0x3fff) | (u32) (d & 0x01) << 14;
+	if (!(d & 0x02) && nRoms >= 1) a |= 0x00000;
+	if (!(d & 0x04) && nRoms >= 2) a |= 0x08000;
+	if (!(d & 0x08) && nRoms >= 3) a |= 0x10000;
+	if (!(d & 0x10) && nRoms >= 4) a |= 0x18000;
+	M.n7751Addr = a;
+	M.n7751Cmd = d >> 5;
+}
+
+static void Mcu16AInt (bool bOn)
+{
+	if (s_pGame->nMcu == MCU_8751) s_Mcu.set_int (1, bOn);
+}
+
+// System 16A's 8751 (as segas16a_state::mcu_io_r / _w, mcu_control_w): bits
+// 3-5 of its port 1 choose what its MOVX reach in the 68000's space; bit 6
+// holds the 68000 in reset, bits 0-2 its interrupt (inverted)
+static u8 Mcu16AXRead (void *, u16 a)
+{
+	switch ((M.nMcuControl >> 3) & 7)
+	{
+	case 0:
+		if (a >= 0x4000 && a < 0x8000)	return (u8) m68k_read_memory_8 (0xc70001 ^ (a & 0x3fff));
+		if (a >= 0x8000 && a < 0xc000)	return (u8) m68k_read_memory_8 (0xc40001 ^ (a & 0x3fff));
+		return 0xff;
+	case 1:
+		if (a < 0x8000)	return (u8) m68k_read_memory_8 (0x400001 ^ (a & 0x7fff));
+		if (a < 0x9000)	return (u8) m68k_read_memory_8 (0x410001 ^ (a & 0xfff));
+		return 0xff;
+	case 3:	return (u8) m68k_read_memory_8 (0x840001 ^ a);
+	case 5:	return s_pRegion[RGN_MAIN][0x00000 + a];
+	case 6:	return s_pRegion[RGN_MAIN][0x10000 + a];
+	case 7:	return s_pRegion[RGN_MAIN][0x20000 + a];
+	}
+	return 0xff;
+}
+
+static void Mcu16AXWrite (void *, u16 a, u8 d)
+{
+	switch ((M.nMcuControl >> 3) & 7)
+	{
+	case 0:
+		if (a >= 0x4000 && a < 0x8000)		m68k_write_memory_8 (0xc70001 ^ (a & 0x3fff), d);
+		else if (a >= 0x8000 && a < 0xc000)	m68k_write_memory_8 (0xc40001 ^ (a & 0x3fff), d);
+		break;
+	case 1:
+		if (a < 0x8000)		m68k_write_memory_8 (0x400001 ^ (a & 0x7fff), d);
+		else if (a < 0x9000)	m68k_write_memory_8 (0x410001 ^ (a & 0xfff), d);
+		break;
+	case 3:	m68k_write_memory_8 (0x840001 ^ a, d); break;
+	}
+}
+
+static u8 Mcu16APortRead (void *, int)	{ return 0xff; }
+
+static void Mcu16APortWrite (void *, int nPort, u8 d)
+{
+	if (nPort != 1)
+	{
+		return;
+	}
+	const bool bReset = (d & 0x40) != 0;
+	if (M.bMainReset && !bReset)
+	{
+		MainReset ();
+	}
+	M.bMainReset = bReset;
+	MainIrq (~d & 7);
+	if (bReset && !V.bDisplay)
+	{
+		VideoSync ();
+		V.bDisplay = true;
+	}
+	M.nMcuControl = d;
+	m68k_end_timeslice ();
+}
+
+// the 7751: it reads its samples on the bus, from the address the Z80 and its
+// own 8243 set; P1 is the DAC; the YM2151's CT1 / CT2 are its /RESET and /INT
+static u8 N7751Bus (void *)
+{
+	const u32 nSize = s_pGame->RegionSize[RGN_N7751DATA];
+	return nSize ? s_pRegion[RGN_N7751DATA][M.n7751Addr % nSize] : 0xff;
+}
+static u8 N7751P2 (void *)	{ return (u8) (0x80 | (M.n7751Cmd & 7) << 4 | (n7751_exp_p2 (&s_N7751) & 0x0f)); }
+static void N7751P1 (void *, u8 d)	{ s16_sound_dac (d); }
+static void N7751Exp (void *, int nPort, u8 d)
+{
+	const unsigned nShift = (unsigned) (nPort - 4) * 4;
+	const u32 nMask = (0xfu << nShift) & 0x3fff;
+	M.n7751Addr = (M.n7751Addr & ~nMask) | (((u32) d << nShift) & nMask);
+}
+static void N7751Lines (u8 d)
+{
+	if (!s_pGame->bN7751) return;
+	n7751_set_reset (&s_N7751, !(d & 0x01));
+	n7751_set_irq (&s_N7751, !(d & 0x02));
+}
+
 // ---- sound CPU ---------------------------------------------------------------------
 
 static void SoundNmi (void)	{ z80_pulse_nmi (&s_Z80); }
@@ -1175,6 +1517,12 @@ static u8 SoundRead (void *, u16 a)
 {
 	const u8 *pRom = s_pRegion[RGN_SOUND];
 	if (a < 0x8000)		return pRom[a];
+	if (s_bS16A)
+	{
+		if (a == 0xe800)	return PpiAck ();
+		if (a >= 0xf800)	return M.SoundRam[a & 0x7ff];
+		return 0xff;
+	}
 	if (a < 0xe000)		return pRom[0x10000 + M.nSoundBank + (a - 0x8000)];
 	if (a == 0xe800)	{ M.bSoundIrq = false; z80_clr_irq (&s_Z80); return M.nToSound; }
 	if (a >= 0xf800)	return M.SoundRam[a & 0x7ff];
@@ -1188,6 +1536,15 @@ static void SoundWrite (void *, u16 a, u8 d)
 
 static u8 SoundPortIn (z80 *, u16 nPort)
 {
+	if (s_bS16A)
+	{
+		switch (nPort & 0xc0)
+		{
+		case 0x00: return s16_sound_ym_r (nPort);
+		case 0xc0: return PpiAck ();
+		}
+		return 0xff;
+	}
 	switch (nPort & 0xc0)
 	{
 	case 0x00: return s16_sound_ym_r (nPort);
@@ -1199,6 +1556,12 @@ static u8 SoundPortIn (z80 *, u16 nPort)
 
 static void SoundPortOut (z80 *, u16 nPort, u8 d)
 {
+	if (s_bS16A)
+	{
+		if ((nPort & 0xc0) == 0x00)				s16_sound_ym_w (nPort, d);
+		else if ((nPort & 0xc0) == 0x80 && s_pGame->bN7751)	N7751Command (d);
+		return;
+	}
 	if ((nPort & 0xc0) == 0x00)
 	{
 		s16_sound_ym_w (nPort, d);
@@ -1309,7 +1672,7 @@ static void Reset (void)
 	M.nToSound = M.nFromSound = 0;
 	M.bSoundIrq = false;
 	M.bMainReset = false;
-	M.nMainFrac = M.nSoundFrac = M.nMcuFrac = 0;
+	M.nMainFrac = M.nSoundFrac = M.nMcuFrac = M.n7751Frac = 0;
 	M.nMainStall = 0;
 	M.nSoundBank = 0;
 	M.nLine = S16_HEIGHT;
@@ -1327,6 +1690,19 @@ static void Reset (void)
 	z80_reset (&s_Z80);
 	if (s_bS18)	s18_sound_reset ();
 	else		s16_sound_reset ();
+	if (s_pGame->bN7751)
+	{
+		n7751_reset (&s_N7751);
+		s_N7751.bReset = false;
+		s_N7751.nCycles = 0;
+	}
+	if (s_bS16A)			// the 8255 resets with all ports as inputs
+	{
+		M.nPpiPC = 0xff;
+		M.n7751Cmd = 0;
+		M.n7751Addr = 0;
+		PpiWrite (3, 0x9b);
+	}
 	if ((s_pGame->nMcu == MCU_8751))
 	{
 		s_Mcu.reset ();
@@ -1402,16 +1778,19 @@ int s16_load (int nGame, TS16Fetch *pFetch, void *pCtx, char *pMissing, size_t n
 
 	s_pGame = pGame;
 	s_bS18 = S18Board (pGame->nBoard);
+	s_bS16A = pGame->nBoard == BOARD_S16A;
 	{
-		const double fLine = s_bS18 ? LINE_HZ_18 : LINE_HZ_16B;
+		const double fLine = s_bS18 ? LINE_HZ_18 : s_bS16A ? LINE_HZ_16A : LINE_HZ_16B;
 		s_nMainPerLine = FIX (10000000.0, fLine);
-		s_nSoundPerLine = FIX (s_bS18 ? 8000000.0 : 5000000.0, fLine);
+		s_nSoundPerLine = FIX (s_bS18 ? 8000000.0 : s_bS16A ? 4000000.0 : 5000000.0, fLine);
 		s_nMcuPerLine = FIX (8000000.0 / 12, fLine);
+		s_n7751PerLine = FIX (6000000.0 / 15, fLine);
 	}
 	s16_video_init (s_pRegion[RGN_TILES], pGame->RegionSize[RGN_TILES],
 			s_pRegion[RGN_SPRITES], pGame->RegionSize[RGN_SPRITES],
 			pGame->nBoard == BOARD_5358 || pGame->nBoard == BOARD_5358_SMALL,
 			s_bS18 ? 0x400 : 0x1000, s_bS18);
+	s16_video_set_16a (s_bS16A);
 	memset (&M, 0, sizeof M);
 	M.nDsw = pGame->pInputs->nDswDefault;
 	memset (M.GunX, 128, sizeof M.GunX);
@@ -1423,6 +1802,21 @@ int s16_load (int nGame, TS16Fetch *pFetch, void *pCtx, char *pMissing, size_t n
 	SoundHooks ();
 	if (s_bS18)	s18_sound_init (Sound18Irq);
 	else		s16_sound_init (SoundNmi);
+	if (!s_bS18)	s16_sound_set_16a (s_bS16A ? N7751Lines : 0);
+	if (pGame->bBigWork)
+	{
+		s_pBigWork = (u8 *) calloc (0x40000, 1);
+		if (!s_pBigWork)
+		{
+			s16_unload ();
+			return 0;
+		}
+	}
+	if (pGame->bN7751)
+	{
+		const TN7751Bus Bus = {0, N7751Bus, N7751P2, N7751P1, N7751Exp};
+		n7751_init (&s_N7751, s_pRegion[RGN_N7751], &Bus);
+	}
 	if (pGame->bMc8123)
 	{
 		s_pSoundOpcodes = (u8 *) malloc (0x8000);
@@ -1435,7 +1829,9 @@ int s16_load (int nGame, TS16Fetch *pFetch, void *pCtx, char *pMissing, size_t n
 	}
 	if (pGame->nMcu == MCU_8751)
 	{
-		const i8751_cpu::TBus Bus = {0, McuXRead, McuXWrite, McuPortRead, McuPortWrite};
+		const i8751_cpu::TBus Bus16A = {0, Mcu16AXRead, Mcu16AXWrite, Mcu16APortRead, Mcu16APortWrite};
+		const i8751_cpu::TBus Bus16B = {0, McuXRead, McuXWrite, McuPortRead, McuPortWrite};
+		const i8751_cpu::TBus &Bus = s_bS16A ? Bus16A : Bus16B;
 		s_Mcu.init (s_pRegion[RGN_MCU], pGame->RegionSize[RGN_MCU], Bus);
 	}
 	s_bLoaded = true;
@@ -1461,8 +1857,11 @@ void s16_unload (void)
 	CryptFree ();
 	free (s_pSoundOpcodes);
 	s_pSoundOpcodes = 0;
+	free (s_pBigWork);
+	s_pBigWork = 0;
 	s_bLoaded = false;
 	s_bS18 = false;
+	s_bS16A = false;
 	s_pGame = 0;
 }
 
@@ -1475,6 +1874,15 @@ void s16_reset (void)
 		Reset ();
 		M.nDsw = nDsw;
 	}
+}
+
+// System 16A: the Z80 runs at 4 MHz, the sound counts 5 MHz cycles
+static void Sound16AAdvance (unsigned nCycles)
+{
+	static unsigned s_nRest;
+	const unsigned n = nCycles * 5 + s_nRest;
+	s_nRest = n % 4;
+	s16_sound_advance (n / 4);
 }
 
 // the CPUs for one line, in turns
@@ -1512,8 +1920,19 @@ static void RunLine (void)
 		{
 			const unsigned nUsed = z80_step_n (&s_Z80, (unsigned) (M.nSoundFrac >> 16));
 			M.nSoundFrac -= (s32) (nUsed << 16);
-			if (s_bS18)	s18_sound_advance (nUsed);
-			else		s16_sound_advance (nUsed);
+			if (s_bS18)		s18_sound_advance (nUsed);
+			else if (s_bS16A)	Sound16AAdvance (nUsed);
+			else			s16_sound_advance (nUsed);
+		}
+		if (s_pGame->bN7751)
+		{
+			M.n7751Frac += (s32) (s_n7751PerLine / SLICES);
+			const int n = M.n7751Frac >> 16;
+			if (n > 0)
+			{
+				M.n7751Frac -= n << 16;
+				n7751_run (&s_N7751, n);
+			}
 		}
 	}
 }
@@ -1618,6 +2037,7 @@ int s16_find (const char *pName)
 static const TS16Game *Game (int n)		{ return n >= 0 && n < s16_num_games () ? &s_Games[n] : 0; }
 const char *s16_game_name (int n)		{ return Game (n) ? Game (n)->pName : ""; }
 const char *s16_game_parent (int n)		{ return Game (n) ? Game (n)->pParent : ""; }
+int s16_game_needs_parent (int n)		{ return Game (n) && Game (n)->bNeedsParent; }
 const char *s16_game_desc (int n)		{ return Game (n) ? Game (n)->pDesc : ""; }
 const char *s16_game_year (int n)		{ return Game (n) ? Game (n)->pYear : ""; }
 const char *s16_game_maker (int n)		{ return Game (n) ? Game (n)->pMaker : ""; }
@@ -1706,15 +2126,18 @@ struct TStateHead
 	char Game[16];
 	u32 nSize;
 };
-static const char s_StateMagic[8] = {'S', '1', '6', 'P', 'I', 0, 0, 3};
+static const char s_StateMagic[8] = {'S', '1', '6', 'P', 'I', 0, 0, 4};
 
 // the sound's part has no fixed size: room for it (System 18: 64 KB of wave RAM too)
 #define STATE_SOUND_MAX		0x14000
 
+// System 16A's 7751, System 16C's work RAM
+static size_t ExtraSize (void)	{ return sizeof s_N7751 + (s_pBigWork ? 0x40000 : 0); }
+
 size_t s16_state_size (void)
 {
 	return sizeof (TStateHead) + sizeof M + sizeof V + s16_m68k_state_size () + sizeof s_Z80
-	       + s_Mcu.state_size () + STATE_SOUND_MAX;
+	       + s_Mcu.state_size () + ExtraSize () + STATE_SOUND_MAX;
 }
 
 int s16_state_save (void *pBuffer, size_t nSize)
@@ -1730,6 +2153,8 @@ int s16_state_save (void *pBuffer, size_t nSize)
 	s16_m68k_state_save (p);				p += s16_m68k_state_size ();
 	memcpy (p, &s_Z80, sizeof s_Z80);			p += sizeof s_Z80;
 	memcpy (p, s_Mcu.state_ptr (), s_Mcu.state_size ());	p += s_Mcu.state_size ();
+	memcpy (p, &s_N7751, sizeof s_N7751);			p += sizeof s_N7751;
+	if (s_pBigWork) { memcpy (p, s_pBigWork, 0x40000);	p += 0x40000; }
 	const size_t nSound = s_bS18 ? s18_sound_state (p, STATE_SOUND_MAX, true) : s16_sound_state (p, STATE_SOUND_MAX, true);
 	if (nSound == 0)
 	{
@@ -1754,7 +2179,8 @@ int s16_state_load (const void *pBuffer, size_t nSize)
 		return 0;
 	}
 	memcpy (&H, pBuffer, sizeof H);
-	const size_t nFixed = sizeof H + sizeof M + sizeof V + s16_m68k_state_size () + sizeof s_Z80 + s_Mcu.state_size ();
+	const size_t nFixed = sizeof H + sizeof M + sizeof V + s16_m68k_state_size () + sizeof s_Z80 + s_Mcu.state_size ()
+			      + ExtraSize ();
 	if (memcmp (H.Magic, s_StateMagic, sizeof H.Magic) != 0 || strncmp (H.Game, s_pGame->pName, sizeof H.Game) != 0
 	    || H.nSize > nSize || H.nSize <= nFixed)
 	{
@@ -1773,6 +2199,13 @@ int s16_state_load (const void *pBuffer, size_t nSize)
 	s16_m68k_state_load (p);				p += s16_m68k_state_size ();
 	memcpy (&s_Z80, p, sizeof s_Z80);			p += sizeof s_Z80;
 	memcpy (s_Mcu.state_ptr (), p, s_Mcu.state_size ());	p += s_Mcu.state_size ();
+	{
+		const TN7751 N = s_N7751;			// (its ROM and hooks are of now)
+		memcpy (&s_N7751, p, sizeof s_N7751);		p += sizeof s_N7751;
+		s_N7751.pRom = N.pRom;
+		s_N7751.Bus = N.Bus;
+	}
+	if (s_pBigWork) { memcpy (s_pBigWork, p, 0x40000);	p += 0x40000; }
 	if ((s_bS18 ? s18_sound_state ((u8 *) p, H.nSize - nFixed, false) : s16_sound_state ((u8 *) p, H.nSize - nFixed, false)) == 0)
 	{
 		Reset ();

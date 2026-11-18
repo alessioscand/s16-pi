@@ -1,6 +1,7 @@
 /*
  * s16-pi - System 16B video: two scrolling tile layers of 16 pages, a text
  * layer, zooming sprites, palette with shadow / highlight. One line at a time.
+ * System 16A: 8 pages, row / column scroll from the 8255, its own sprites.
  *
  * Tile layers, sprites, priorities and palette as MAME draws them
  * (segaic16.cpp, sega16sp.cpp, segas16b_v.cpp: Aaron Giles), re-implemented
@@ -18,7 +19,7 @@ static unsigned s_nTiles;
 static const u16 *s_pSprites;		// sprite ROMs as words in the host's order
 static u16 *s_pSprWords;
 static unsigned s_nSprBanks;		// of 0x10000 words
-static bool s_bAltBanks, s_bS18;
+static bool s_bAltBanks, s_bS18, s_b16A;
 static unsigned s_nBankSize;
 
 void s16_video_init (const u8 *pTiles, size_t nTilesSize, const u8 *pSprites, size_t nSpritesSize,
@@ -54,6 +55,13 @@ void s16_video_init (const u8 *pTiles, size_t nTilesSize, const u8 *pSprites, si
 	}
 	s_pSprites = s_pSprWords;
 	s_nSprBanks = (unsigned) (nSpritesSize / 0x20000);
+}
+
+// System 16A: sprite banks of 0x8000 words
+void s16_video_set_16a (bool b16A)
+{
+	s_b16A = b16A;
+	if (b16A && s_pSprWords) s_nSprBanks *= 2;
 }
 
 unsigned s16_video_tiles (void)		{ return s_nTiles; }
@@ -307,6 +315,126 @@ static bool SpriteLine (const TS16Video *pV, int y, u16 *pLine)
 	return bAny;
 }
 
+// ---- System 16A ---------------------------------------------------------------
+// as segaic16.cpp (tilemap_16a_draw_layer) and sega16sp.cpp (sega_sys16a_sprite_device)
+
+// One line of a scrolling layer (nWhich 0 = foreground, 1 = background): 8
+// pages, scroll registers in text RAM, per-row x and per-column y scroll
+// switched on by the 8255.
+static void LayerLine16A (const TS16Video *pV, int nWhich, int y, u16 *pLine)
+{
+	const u16 *pText = pV->TextRam;
+	u16 nPages = pText[0xe9e / 2 - nWhich];
+	nPages = (u16) (((nPages >> 4) & 0x0707) | ((nPages << 4) & 0x7070));
+	const unsigned nXScroll = (pV->bRowScroll ? pText[0xf80 / 2 + (y / 8) * 2 + nWhich] : pText[0xff8 / 2 + nWhich]) & 0x1ff;
+	const unsigned nX0 = (0xc8 - nXScroll) & 0x3ff;
+	unsigned nVY = (unsigned) (y + (pText[0xf24 / 2 + nWhich] & 0xff)) & 0x1ff;
+
+	unsigned nTileX = ~0u, nTileRow = 0;
+	const u8 *pPix = 0;
+	u16 nBase = 0;
+	for (int x = 0; x < S16_WIDTH; x++)
+	{
+		if (pV->bColScroll && (x & 15) == 0)
+		{
+			nVY = (unsigned) (y + (pText[0xf30 / 2 + (x / 16) * 2 + nWhich] & 0xff)) & 0x1ff;
+			nTileX = ~0u;
+		}
+		const unsigned nVX = (nX0 + (unsigned) x) & 0x3ff;
+		if ((nVX >> 3) != nTileX)
+		{
+			nTileX = nVX >> 3;
+			const unsigned nQuad = (nVX >> 9) | ((nVY >> 8) << 1);
+			const unsigned nPage = (nPages >> (nQuad * 4)) & 0x07;
+			const u16 nData = pV->TileRam[nPage * 0x800 + ((nVY & 0xff) >> 3) * 64 + (nTileX & 63)];
+			const unsigned nCode = ((nData >> 1) & 0x1000) | (nData & 0xfff);
+			pPix = s_pTilePix + (size_t) (nCode % s_nTiles) * 64;
+			nBase = (u16) ((nData & 0x1000) << 3 | ((nData >> 5) & 0x7f) << 3);
+			nTileRow = (nVY & 7) * 8;
+		}
+		pLine[x] = (u16) (nBase | pPix[nTileRow + (nVX & 7)]);
+	}
+}
+
+static void TextLine16A (const TS16Video *pV, int y, u16 *pLine)
+{
+	const u16 *pRow = pV->TextRam + (y >> 3) * 64 + 24;
+	const unsigned nTileRow = (unsigned) (y & 7) * 8;
+	for (int tx = 0; tx < S16_WIDTH / 8; tx++)
+	{
+		const u16 nData = pRow[tx];
+		const u8 *pPix = s_pTilePix + (size_t) ((nData & 0xff) % s_nTiles) * 64 + nTileRow;
+		const u16 nBase = (u16) ((nData & 0x0800) << 4 | ((nData >> 8) & 0x07) << 3);
+		for (int k = 0; k < 8; k++)
+		{
+			pLine[tx * 8 + k] = (u16) (nBase | pPix[k]);
+		}
+	}
+}
+
+// The sprites of one line (0xffff = nothing). A sprite's row r is drawn on
+// line r + 1, and x 189 is the left edge. The 15-bit offset can carry into
+// bit 15, the flip bit: the rest of the sprite is then read backwards.
+static bool SpriteLine16A (const TS16Video *pV, int y, u16 *pLine)
+{
+	bool bAny = false;
+	const int ys = y - 1;
+	for (const u16 *pData = pV->SprRam; pData < pV->SprRam + 0x400; pData += 8)
+	{
+		const int nBottom = pData[0] >> 8;
+		if (nBottom > 0xf0)
+		{
+			break;
+		}
+		const int nTop = pData[0] & 0xff;
+		if (nTop >= nBottom || ys < nTop || ys >= nBottom)
+		{
+			continue;
+		}
+		unsigned nBank = pV->SprBank[(pData[4] >> 4) & 0x07];
+		if (nBank == 255)
+		{
+			continue;
+		}
+		if (s_nSprBanks)
+		{
+			nBank %= s_nSprBanks;
+		}
+		const u16 *pRom = s_pSprites + 0x8000 * (size_t) nBank;
+		const u16 nAddr = (u16) (pData[3] + (s16) pData[2] * (ys - nTop + 1));
+		const u16 nColPri = (u16) (((pData[4] >> 8) & 0x3f) << 4 | (pData[4] & 3) << 10);
+		if (!bAny)
+		{
+			memset (pLine, 0xff, S16_WIDTH * sizeof (u16));
+			bAny = true;
+		}
+		const int nXPos = pData[1] & 0x1ff;
+		int x = nXPos;
+		const bool bFlip = (nAddr & 0x8000) != 0;
+		u16 a = bFlip ? (u16) (nAddr + 1) : (u16) (nAddr - 1);
+		while (((nXPos - x) & 0x1ff) != 1)
+		{
+			const u16 nPixels = bFlip ? pRom[--a & 0x7fff] : pRom[++a & 0x7fff];
+			int nPix = 0;
+			for (int k = 0; k < 4; k++)
+			{
+				nPix = bFlip ? (nPixels >> (k * 4)) & 0x0f : (nPixels >> (12 - k * 4)) & 0x0f;
+				const int sx = x - 189;
+				if (sx >= 0 && sx < S16_WIDTH && nPix != 0 && nPix != 15)
+				{
+					pLine[sx] = (u16) (nColPri | nPix);
+				}
+				x++;
+			}
+			if (nPix == 15)
+			{
+				break;
+			}
+		}
+	}
+	return bAny;
+}
+
 // ---- one line of the picture ---------------------------------------------------
 
 // Priorities as MAME: the background sets 1 (2 for its priority tiles), the
@@ -349,7 +477,8 @@ void s16_video_line (const TS16Video *pV, int y, u32 *pOut)
 		}
 	};
 
-	LayerLine (pV, 1, y, Layer);			// background: opaque, then its pixels' priorities
+	auto Layer16 = s_b16A ? LayerLine16A : LayerLine;
+	Layer16 (pV, 1, y, Layer);			// background: opaque, then its pixels' priorities
 	for (int x = 0; x < S16_WIDTH; x++)
 	{
 		Pix[x] = Layer[x] & 0x3ff;
@@ -370,7 +499,7 @@ void s16_video_line (const TS16Video *pV, int y, u32 *pOut)
 		if (p & 7) Pri[x] |= (p & 0x8000) ? 2 : 1;
 	}
 	DrawVdp (1);
-	LayerLine (pV, 0, y, Layer);			// foreground
+	Layer16 (pV, 0, y, Layer);			// foreground
 	for (int x = 0; x < S16_WIDTH; x++)
 	{
 		const u16 p = Layer[x];
@@ -381,7 +510,8 @@ void s16_video_line (const TS16Video *pV, int y, u32 *pOut)
 		}
 	}
 	DrawVdp (2);
-	TextLine (pV, y, Layer);
+	if (s_b16A)	TextLine16A (pV, y, Layer);
+	else		TextLine (pV, y, Layer);
 	for (int x = 0; x < S16_WIDTH; x++)
 	{
 		const u16 p = Layer[x];
@@ -392,7 +522,7 @@ void s16_video_line (const TS16Video *pV, int y, u32 *pOut)
 		}
 	}
 	DrawVdp (3);
-	if (SpriteLine (pV, y, Spr))
+	if (s_b16A ? SpriteLine16A (pV, y, Spr) : SpriteLine (pV, y, Spr))
 	{
 		for (int x = 0; x < S16_WIDTH; x++)
 		{

@@ -1,8 +1,9 @@
 /*
  * s16-pi - the System 16B machine: 68000, Z80, the 315-5195 memory mapper,
- * the optional 8751 protection MCU, I/O. The logic follows MAME's driver
- * (segas16b.cpp, 315_5195.cpp, Aaron Giles), re-implemented by hand; time is
- * kept in scanlines, as the front-end needs them.
+ * the optional 8751 protection MCU, I/O; System 16A (fixed map, 8255, 7751)
+ * and 16C (16B with 256 KB of work RAM). The logic follows MAME's drivers
+ * (segas16a.cpp, segas16b.cpp, 315_5195.cpp, Aaron Giles), re-implemented by
+ * hand; time is kept in scanlines, as the front-end needs them.
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -25,9 +26,11 @@ typedef int64_t s64;
 
 // ---- game description (core/s16_games.inc) --------------------------------
 
-enum { RGN_MAIN, RGN_TILES, RGN_SPRITES, RGN_SOUND, RGN_MCU, RGN_KEY, RGN_SOUNDKEY, RGN_COUNT };
+enum { RGN_MAIN, RGN_TILES, RGN_SPRITES, RGN_SOUND, RGN_MCU, RGN_KEY, RGN_SOUNDKEY,
+       RGN_N7751, RGN_N7751DATA, RGN_COUNT };	// (the last two: System 16A's 7751)
 enum { LOAD_BYTES, LOAD_EVEN, LOAD_ODD };		// plain, or every other byte (16-bit ROM pairs)
 enum { BOARD_5358_SMALL, BOARD_5358, BOARD_5521, BOARD_5704, BOARD_5797,	// System 16B
+       BOARD_S16A,								// System 16A
        BOARD_S18_SHADOW, BOARD_S18_5874, BOARD_S18_5987 };			// System 18
 enum { CPU_68000, CPU_FD1094, CPU_FD1089A, CPU_FD1089B };
 enum { MCU_NONE, MCU_8751, MCU_SIM_TTURF, MCU_SIM_WB3 };	// (the last two: not dumped, MAME's stand-ins)
@@ -84,6 +87,9 @@ struct TS16Game
 	bool bMc8123;				// the sound program is encrypted
 	bool bPpi;				// System 18: the 8255 of the 4-player D. D. Crew
 	bool bGuns;				// System 18: Laser Ghost's guns, read by an MSM6253 A/D
+	bool bN7751;				// System 16A: the 7751 sound MCU
+	bool bBigWork;				// System 16C: 256 KB of work RAM
+	bool bNeedsParent;			// a clone with ROMs of its parent
 };
 
 static inline bool S18Board (u8 nBoard)	{ return nBoard >= BOARD_S18_SHADOW; }
@@ -140,6 +146,9 @@ struct TS16Video
 
 	u32 Colors[0x1040];			// 2048 colours, their shadow / highlight, the VDP's 64
 
+	// System 16A: column / row scroll, from the 8255's port C
+	bool bColScroll, bRowScroll;
+
 	// System 18
 	TS18Vdp Vdp;
 	u8 nVdpMixing;				// where the VDP's picture goes among the layers
@@ -150,6 +159,7 @@ struct TS16Video
 // tile bank (System 16B 4096, System 18 1024)
 void s16_video_init (const u8 *pTiles, size_t nTilesSize, const u8 *pSprites, size_t nSpritesSize,
 		     bool bAltBanks, unsigned nBankSize, bool bS18);
+void s16_video_set_16a (bool b16A);		// System 16A layers and sprites
 unsigned s16_video_tiles (void);
 unsigned s16_video_sprite_banks (void);		// of 0x20000 bytes
 void s16_video_exit (void);
@@ -168,6 +178,8 @@ void s16_sound_ym_w (unsigned nOffset, u8 nData);
 void s16_sound_upd_control (bool bMd, bool bReset);
 void s16_sound_upd_w (u8 nData);
 bool s16_sound_upd_idle (void);
+void s16_sound_set_16a (void (*pPortWrite) (u8));	// System 16A (0: System 16B)
+void s16_sound_dac (u8 nData);				// System 16A: the 7751's DAC
 int s16_sound_read (int16_t *pDst, int nMaxFrames);
 size_t s16_sound_state (u8 *pBuf, size_t nMax, bool bSave);	// returns the bytes used, 0 = failed
 

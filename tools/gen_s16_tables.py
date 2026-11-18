@@ -30,8 +30,13 @@ def port_source(drv, first):
 
 drv16 = open(os.path.join(src, 'segas16b.cpp')).read()
 drv18 = open(os.path.join(src, 'segas18.cpp')).read()
-# (the two drivers' input sets have different names but for none in common)
-ports_src = port_source(drv16, 'system16b_generic') + '\n' + port_source(drv18, 'system18_generic')
+# System 16A: its input sets get an a_ prefix (some have the names of 16B ones)
+drv16a = open(os.path.join(src, 'segas16a.cpp')).read()
+drv16a = re.sub(r'(INPUT_PORTS_START|PORT_INCLUDE)\(\s*(\w+)\s*\)', r'\1( a_\2 )', drv16a)
+drv16a = re.sub(r'^(GAME\(\s*\d+\s*,\s*\w+\s*,\s*\w+\s*,\s*\w+\s*,\s*)(\w+)', r'\1a_\2', drv16a, flags=re.M)
+# (the drivers' input sets have different names but for none in common)
+ports_src = port_source(drv16, 'system16b_generic') + '\n' + port_source(drv18, 'system18_generic') + \
+    '\n' + port_source(drv16a, 'a_system16a_generic')
 ports_src = re.sub(r'//.*$', '', ports_src, flags=re.M)
 ports_src = re.sub(r'/\*.*?\*/', '', ports_src, flags=re.S)
 defs = r'''
@@ -46,8 +51,10 @@ defs = r'''
 #define DEF_STR(x) #x
 #define PORT_DIPLOCATION(x) @LOC x
 #define PORT_CONDITION(a,b,c,d) @COND a b c d
-#define PORT_DIPUNKNOWN_DIPLOC(m,d,l) @DIP m d "Unknown" @LOC l @SET d "Off" @SET 0 "On"
+#define PORT_DIPUNKNOWN_DIPLOC(m,d,l) @DIP m m "Unknown" @LOC l @SET m "Off" @SET 0 "On"
 #define PORT_DIPUNUSED_DIPLOC(m,d,l) @DIP m m "Unused" @LOC l @SET m "Off" @SET 0 "On"
+#define PORT_DIPUNKNOWN(m,d) @DIP m m "Unknown" @SET m "Off" @SET 0 "On"
+#define PORT_DIPUNUSED(m,d) @DIP m m "Unused" @SET m "Off" @SET 0 "On"
 #define PORT_SERVICE_DIPLOC(m,s,l) @DIP m m "Service_Mode" @LOC l @SET m "Off" @SET 0 "On"
 #define PORT_SERVICE_NO_TOGGLE(m,s) @BIT m s IPT_SERVICE
 #define PORT_PLAYER(n) @PLAYER n
@@ -143,7 +150,10 @@ def resolve(name):
             bit[2] = int(rest.split()[0])
         elif kw == 'DIP':
             m, d, n = re.match(r'(\S+)\s*,?\s*(\S+)\s*,?\s*(.*)', rest.replace(',', ' ', 2)).groups()
-            m = int(m.strip(','), 16); d = int(d.strip(','), 16)
+            try:
+                m = int(m.strip(","), 16); d = int(d.strip(","), 16)
+            except ValueError:
+                raise SystemExit("DIP %s in %s" % (rest, name))
             n = n.strip().strip('"')
             dip = {'mask': m, 'default': d, 'name': n, 'settings': [], 'cond': None, 'loc': ''}
             port['dips'].append(dip)
@@ -193,6 +203,7 @@ def nice(s):
 SHORT = {
     'Game Time P1': 'Time P1', 'Game Time P2': 'Time P2', 'Credits needed': 'Credits',
     'Attack Button to Start': 'Attack To Start', 'Omikuji Difficulty': 'Omikuji Level',
+    'Only before level 5': 'Before Level 5',
 }
 
 # name and longest value in at most 24 characters (25 fit, one is the gap)
@@ -286,10 +297,11 @@ def controls(ports, system):
     return codes, conds, players, buttons
 
 # ---------------------------------------------------------------- ROMs
-REGIONS = {'maincpu': 'RGN_MAIN', 'tiles': 'RGN_TILES', 'sprites': 'RGN_SPRITES', 'soundcpu': 'RGN_SOUND',
-           'mcu': 'RGN_MCU', 'maincpu:key': 'RGN_KEY', 'soundcpu:key': 'RGN_SOUNDKEY'}
+REGIONS = {'maincpu': 'RGN_MAIN', 'tiles': 'RGN_TILES', 'gfx1': 'RGN_TILES', 'sprites': 'RGN_SPRITES',
+           'soundcpu': 'RGN_SOUND', 'mcu': 'RGN_MCU', 'maincpu:key': 'RGN_KEY', 'soundcpu:key': 'RGN_SOUNDKEY',
+           'n7751': 'RGN_N7751', 'n7751data': 'RGN_N7751DATA'}
 roms = {}
-for m in re.finditer(r'ROM_START\(\s*(\w+)\s*\)(.*?)ROM_END', drv16 + drv18, re.S):
+for m in re.finditer(r'ROM_START\(\s*(\w+)\s*\)(.*?)ROM_END', drv16 + drv18 + drv16a, re.S):
     name, body_ = m.group(1), m.group(2)
     regions = []
     reg = None
@@ -334,6 +346,14 @@ MACHINES = {    # machine configuration: CPU, 8751, MC8123, 171-5797 expected
     'system18_fd1094_i8751': ('CPU_FD1094', True, False), 'system18_i8751': ('CPU_68000', True, False),
     'ddcrew4p': ('CPU_68000', False, False), 'ddcrew4p_fd1094': ('CPU_FD1094', False, False),
     'lghost_fd1094': ('CPU_FD1094', False, False),
+    # System 16C: System 16B with 256 KB of work RAM
+    'system16c': ('CPU_68000', False, False),
+    # System 16A
+    'system16a': ('CPU_68000', False, False), 'system16a_no7751': ('CPU_68000', False, False),
+    'system16a_i8751': ('CPU_68000', True, False),
+    'system16a_fd1089a': ('CPU_FD1089A', False, False), 'system16a_fd1089a_no7751': ('CPU_FD1089A', False, False),
+    'system16a_fd1089b': ('CPU_FD1089B', False, False), 'system16a_fd1089b_no7751': ('CPU_FD1089B', False, False),
+    'system16a_fd1094': ('CPU_FD1094', False, False), 'system16a_fd1094_no7751': ('CPU_FD1094', False, False),
 }
 INITS = {       # driver init: ROM board, what stands for the 8751
     'init_generic_5358_small': ('BOARD_5358_SMALL', None), 'init_generic_5358': ('BOARD_5358', None),
@@ -345,8 +365,10 @@ INITS = {       # driver init: ROM board, what stands for the 8751
     # System 18 (D. D. Crew's 4-player sets: the 171-5987 with an 8255)
     'init_generic_shad': ('BOARD_S18_SHADOW', None), 'init_generic_5874': ('BOARD_S18_5874', None),
     'init_generic_5987': ('BOARD_S18_5987', None), 'init_ddcrew4p': ('BOARD_S18_5987', None), 'init_lghost': ('BOARD_S18_5987', None),
+    # System 16A
+    'init_generic_16a': ('BOARD_S16A', None),
 }
-STATES = {'segas16b_state': 16, 'segas18_state': 18}
+STATES = {'segas16b_state': 16, 'segas18_state': 18, 'segas16a_state': 16}
 
 def title(desc):
     """'Golden Axe (set 6, US) (8751 317-123A)' -> 'Golden Axe (set 6, US)'"""
@@ -361,8 +383,10 @@ def title(desc):
 
 games = []
 skipped = []
-for m in re.finditer(r'^GAME\(\s*(\d+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*"([^"]*)"\s*,\s*"([^"]*)"\s*,\s*([^)]*)\)', drv16 + '\n' + drv18, re.M):
+for m in re.finditer(r'^GAME\(\s*(\d+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*"([^"]*)"\s*,\s*"([^"]*)"\s*,\s*([^)]*)\)', drv16 + '\n' + drv18 + '\n' + drv16a, re.M):
     year, name, parent, mcfg, inp, cls, init, rot, manu, desc, flags = m.groups()
+    if cls == 'segas16a_state' and init == 'init_generic':
+        init = 'init_generic_16a'
     why = None
     system = STATES.get(cls)
     if 'bootleg' in manu.lower() or 'bootleg' in desc.lower():
@@ -386,7 +410,10 @@ for m in re.finditer(r'^GAME\(\s*(\d+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*,\s
     board, sim = INITS[init]
     games.append(dict(year=year, name=name, parent=parent, inp=inp, manu=manu, desc=title(desc), cpu=cpu,
                       mcu=sim or ('MCU_8751' if mcu else 'MCU_NONE'), mc8123=mc8123, board=board,
-                      system=system, ppi=init == 'init_ddcrew4p', guns=init == 'init_lghost'))
+                      system=system, ppi=init == 'init_ddcrew4p', guns=init == 'init_lghost',
+                      n7751=mcfg in ('system16a', 'system16a_i8751', 'system16a_fd1089a', 'system16a_fd1089b',
+                                     'system16a_fd1094'),
+                      bigwork=mcfg == 'system16c'))
 for name, why in skipped:
     print('left out: %-12s %s' % (name, why), file=sys.stderr)
 print('%d games' % len(games), file=sys.stderr)
@@ -394,7 +421,7 @@ print('%d games' % len(games), file=sys.stderr)
 # ---------------------------------------------------------------- output
 o = []
 w = o.append
-w('// Generated by tools/gen_s16_tables.py from MAME src/mame/sega/segas16b.cpp and segas18.cpp')
+w('// Generated by tools/gen_s16_tables.py from MAME src/mame/sega/segas16a.cpp, segas16b.cpp and segas18.cpp')
 w('// (BSD-3-Clause, copyright-holders: Aaron Giles). Do not edit by hand.')
 w('')
 for inp, system in sorted({(g['inp'], g['system']) for g in games}):
@@ -455,13 +482,22 @@ for g in games:
     g['nroms'] = n
     w('};')
 w('')
+def needs_parent(g):
+    """a clone whose split zip leaves out ROMs it shares with its parent"""
+    if g['parent'] == '0' or g['parent'] not in roms:
+        return False
+    crcs = lambda n: {l[1] for r in roms[n] if r['name'] in REGIONS for l in r['loads']}
+    return bool(crcs(g['name']) & crcs(g['parent']))
+
 w('static const TS16Game s_Games[] =\n{')
 for g in games:
     regs = {REGIONS[r['name']]: r['size'] for r in roms[g['name']] if r['name'] in REGIONS}
-    order = ('RGN_MAIN', 'RGN_TILES', 'RGN_SPRITES', 'RGN_SOUND', 'RGN_MCU', 'RGN_KEY', 'RGN_SOUNDKEY')
-    w('\t{%s, %s, %s, %s, %s,\n\t roms_%s, %d, {%s},\n\t &inputs_%s, %s, %s, %s, %s, %s, %s},' % (
+    order = ('RGN_MAIN', 'RGN_TILES', 'RGN_SPRITES', 'RGN_SOUND', 'RGN_MCU', 'RGN_KEY', 'RGN_SOUNDKEY',
+             'RGN_N7751', 'RGN_N7751DATA')
+    w('\t{%s, %s, %s, %s, %s,\n\t roms_%s, %d, {%s},\n\t &inputs_%s, %s, %s, %s, %s, %s, %s, %s, %s, %s},' % (
         cstr(g['name']), cstr(g['parent'] if g['parent'] != '0' else ''), cstr(g['desc']), cstr(g['year']), cstr(g['manu']),
         g['name'], g['nroms'], ', '.join('0x%x' % regs.get(k, 0) for k in order),
-        g['inp'], g['board'], g['cpu'], g['mcu'], 'true' if g['mc8123'] else 'false', 'true' if g['ppi'] else 'false', 'true' if g['guns'] else 'false'))
+        g['inp'], g['board'], g['cpu'], g['mcu'], 'true' if g['mc8123'] else 'false', 'true' if g['ppi'] else 'false', 'true' if g['guns'] else 'false',
+        'true' if g['n7751'] else 'false', 'true' if g['bigwork'] else 'false', 'true' if needs_parent(g) else 'false'))
 w('};')
 print('\n'.join(o))

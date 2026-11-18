@@ -27,6 +27,7 @@ int s16_num_games (void);
 int s16_find (const char *pName);			/* -1 = not a set the core knows */
 const char *s16_game_name (int nGame);			/* "goldnaxe" */
 const char *s16_game_parent (int nGame);		/* "" or the parent's name */
+int s16_game_needs_parent (int nGame);			/* its zip leaves out ROMs of the parent's */
 const char *s16_game_desc (int nGame);			/* "Golden Axe (World)" */
 const char *s16_game_year (int nGame);
 const char *s16_game_maker (int nGame);

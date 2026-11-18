@@ -30,7 +30,7 @@ public release: 1.0.0.
   finished row at a time, so beam racing never shows them half cleared. The
   HVS enlarges at most 2x, so the text can have 2 screen pixels per font
   pixel (1080p: 2x CPU, 2x HVS, as with scanlines).
-- **Core** (`core/`): the System 16B and System 18 machines, written by
+- **Core** (`core/`): the System 16A, 16B (and 16C) and System 18 machines, written by
   hand on MAME's logic and checked against MAME 0.264 on the Linux harness.
   - `s16.cpp`: 68000 (Musashi), Z80, the 315-5195 memory mapper, I/O, time
     kept in scanlines (262 per frame, the CPUs take turns 8 times a line),
@@ -54,6 +54,12 @@ public release: 1.0.0.
     mapper puts it at) and keeps it.
   - ROM boards: 171-5358 (and its small version), 171-5521, 171-5704,
     171-5797 (with its 315-5248 multiplier and 315-5250 compare chips).
+  - System 16A (as MAME's `segas16a.cpp`): a fixed map with its mirrors,
+    the 8255 (sound latch with handshake, display, row / column scroll,
+    the Z80's NMI), 8 tile pages, its own sprites, 60 Hz with the Z80 at
+    4 MHz. `n7751.cpp`: the uPD7751 (an 8048) and its 8243, which play the
+    samples through an 8-bit DAC. System 16C: System 16B with 256 KB of
+    work RAM (Fantasy Zone II).
   - System 18 (as MAME's `segas18.cpp`): the mapper's own regions for the
     shadow, 171-5874 and 171-5987 boards (tile and sprite banks), the
     315-5296 I/O chip, D. D. Crew's 8255 for players 3 and 4, 57.23 Hz with
@@ -65,15 +71,15 @@ public release: 1.0.0.
     The output is 800 samples per game frame: the game runs at the
     screen's 60 Hz, 4.8% faster than the board, with the sound in step.
 - **Games**: `core/s16_games.inc` is written by `tools/gen_s16_tables.py`
-  from MAME's `segas16b.cpp` and `segas18.cpp`:
-  80 sets (57 System 16B, 23 System 18) with their ROMs, hardware, DIP
+  from MAME's `segas16a.cpp`, `segas16b.cpp` and `segas18.cpp`: 100 sets
+  (18 System 16A, 57 System 16B, 2 System 16C, 23 System 18) with their ROMs, hardware, DIP
   switches and what each input bit is (and the bits that change with a
   DIP switch, as Moonwalker's coin chutes). DIP names and values are
   shortened in `nice()` so that name and longest value fit in 24
   characters (25 with the gap); `fit()` warns about any that does not.
   Left out (the script says why
-  for each): bootlegs and Korean boards, sets not working in MAME, System
-  16C, controls a pad does not have (trackball, dial, analog stick,
+  for each): bootlegs and Korean boards, sets not working in MAME, the
+  encrypted Z80 of one Fantasy Zone set, controls a pad does not have (trackball, dial, analog stick,
   mahjong, two sticks, Where's Wally's light gun) and, for
   now, the games on a vertical monitor (Desert Breaker, Hammer Away). Tough Turf and Wonder Boy III (set 6), whose 8751 is
   not dumped, use MAME's stand-ins for it. `src/gametable.cpp`, written
@@ -93,6 +99,11 @@ public release: 1.0.0.
   first 37 seconds of attract mode; then its demo play drifts by a few
   frames for a while and comes back in step. Its sound is at MAME's level.
   The other System 18 sets have not been run: no ROMs here.
+  System 16A: `shinobi` (with the 7751) identical to MAME at frames 300,
+  600 and 900; its sound follows MAME's, the 7751's samples included. The
+  other System 16A and the System 16C sets have not been run: no ROMs here.
+  A clone whose zip leaves out ROMs it shares with its parent needs the
+  parent's zip (`s16_game_needs_parent`); the others play on their own.
 - **Laser Ghost**: its three guns played with pads. The MSM6253 A/D
   converter reads the crosshairs; the game bends the side guns' shots
   towards the centre, which `core/s16_guns.inc` (measured with the
@@ -109,14 +120,11 @@ public release: 1.0.0.
 
 1. The vertical games (Passing Shot, Time Scanner, Action Fighter,
    Desert Breaker ...).
-2. System 16A (`segas16a.cpp`, sound with the 7751): the first Shinobi
-   set, whose zip sets 2, 3 and 5 already need for their sprites.
-3. System 16C (Fantasy Zone II).
 
 ## Layout
 
 ```
-core/        the System 16B and 18 machines (s16_api.h is all the front-end sees)
+core/        the System 16A, 16B and 18 machines (s16_api.h is all the front-end sees)
 harness/     Linux test harness: make, ./s16test <roms> altbeast -s 300 -w
 tools/       gen_s16_tables.py: the game tables from MAME's driver;
              gen_s16_hiscore.py: the hiscore rows from MAME's hiscore.dat

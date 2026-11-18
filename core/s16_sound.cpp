@@ -1,6 +1,7 @@
 /*
  * s16-pi - System 16B sound: YM2151 (ymfm, Aaron Giles) and the uPD7759 ADPCM
- * speech chip, fed by the Z80 one byte at a time (slave mode).
+ * speech chip, fed by the Z80 one byte at a time (slave mode). System 16A:
+ * the YM2151 and the 7751's DAC.
  *
  * uPD7759: state machine and tables from MAME's upd7759.cpp (Juergen
  * Buchmueller, Mike Balfour, Howie Cohen, Olivier Galibert, Aaron Giles),
@@ -205,6 +206,9 @@ static void UpdReset (void)
 // ---- YM2151 and the mix ----------------------------------------------------------
 
 static u64 s_nCycles;			// Z80 cycles since reset
+static void (*s_pPortWrite) (u8);	// the YM2151's CT1 / CT2
+static bool s_b16A;			// System 16A: the 7751's DAC, no uPD7759
+static u8 s_nDac = 0x80;
 static u64 s_nOutDone, s_nOpmDone;	// output and YM2151 samples made
 static s32 s_nOpmPrev, s_nOpmCur;
 static u64 s_nOpmTimer[2];		// when each YM2151 timer expires (Z80 cycles), 0 = stopped
@@ -227,6 +231,10 @@ public:
 	void ymfm_set_busy_end (uint32_t nClocks) override	{ s_nOpmBusyEnd = s_nCycles + ((u64) nClocks * 5 + 3) / 4; }
 	bool ymfm_is_busy (void) override			{ return s_nCycles < s_nOpmBusyEnd; }
 	void ymfm_update_irq (bool) override			{}	// not connected on this board
+	void ymfm_external_write (ymfm::access_class, uint32_t, uint8_t nData) override
+	{
+		if (s_pPortWrite) s_pPortWrite (nData);		// System 16A: the 7751's lines
+	}
 	void Expired (unsigned nTimer)				{ m_engine->engine_timer_expired (nTimer); }
 };
 static TOpm *s_pOpm;
@@ -347,7 +355,18 @@ static void Update (void)
 		}
 		const s32 nFrac = (s32) (nPos % 48000);
 		s32 v = s_nOpmPrev + (s32) ((s64) (s_nOpmCur - s_nOpmPrev) * nFrac / 48000);
-		v = Analog (v, U.nState != ST_IDLE ? U.nSample : 0);
+		if (s_b16A)
+		{
+			// as MAME's levels (YM2151 0.43, DAC 0.4), scaled as the System 16B mix
+			const double f = GAIN_OPM * v + GAIN_OPM * 0.4 / 0.43 * ((int) s_nDac - 128) * 256;
+			s_fHpOut = s_fHpK * (s_fHpOut + f - s_fHpIn);
+			s_fHpIn = f;
+			v = (s32) lrint (s_fHpOut);
+		}
+		else
+		{
+			v = Analog (v, U.nState != ST_IDLE ? U.nSample : 0);
+		}
 		if (v > 32767) v = 32767;
 		if (v < -32768) v = -32768;
 		if (s_nFifoWr - s_nFifoRd >= FIFO)
@@ -431,6 +450,15 @@ void s16_sound_upd_control (bool bMd, bool bReset)
 }
 
 void s16_sound_upd_w (u8 nData)		{ Update (); U.nFifoIn = nData; }
+
+void s16_sound_set_16a (void (*pPortWrite) (u8))
+{
+	s_b16A = pPortWrite != 0;
+	s_pPortWrite = pPortWrite;
+	s_nDac = 0x80;
+}
+
+void s16_sound_dac (u8 nData)		{ Update (); s_nDac = nData; }
 bool s16_sound_upd_idle (void)		{ Update (); return U.nState == ST_IDLE; }
 
 // save states: everything but the output FIFO (bSave false = load)
@@ -446,6 +474,7 @@ size_t s16_sound_state (u8 *pBuf, size_t nMax, bool bSave)
 	{
 		u32 nOpmSize;
 		TUpd Upd;
+		u8 nDac;
 		u64 nCycles, nOutDone, nOpmDone, nOpmTimer[2], nOpmBusyEnd;
 		s32 nOpmPrev, nOpmCur;
 		TBiquad Sk1, Sk2;
@@ -456,6 +485,7 @@ size_t s16_sound_state (u8 *pBuf, size_t nMax, bool bSave)
 		memset (&H, 0, sizeof H);
 		H.nOpmSize = (u32) Opm.size ();
 		H.Upd = U;
+		H.nDac = s_nDac;
 		H.nCycles = s_nCycles; H.nOutDone = s_nOutDone; H.nOpmDone = s_nOpmDone;
 		H.nOpmTimer[0] = s_nOpmTimer[0]; H.nOpmTimer[1] = s_nOpmTimer[1]; H.nOpmBusyEnd = s_nOpmBusyEnd;
 		H.nOpmPrev = s_nOpmPrev; H.nOpmCur = s_nOpmCur;
@@ -473,6 +503,7 @@ size_t s16_sound_state (u8 *pBuf, size_t nMax, bool bSave)
 	ymfm::ymfm_saved_state State (Opm, false);
 	s_pOpm->m_Chip.save_restore (State);
 	U = H.Upd;
+	s_nDac = H.nDac;
 	s_nCycles = H.nCycles; s_nOutDone = H.nOutDone; s_nOpmDone = H.nOpmDone;
 	s_nOpmTimer[0] = H.nOpmTimer[0]; s_nOpmTimer[1] = H.nOpmTimer[1]; s_nOpmBusyEnd = H.nOpmBusyEnd;
 	s_nOpmPrev = H.nOpmPrev; s_nOpmCur = H.nOpmCur;

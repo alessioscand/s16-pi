@@ -124,14 +124,14 @@ void CKernel::ScanGames (void)
 		{
 			continue;			// not a set the core knows
 		}
-		// a clone needs its parent's zip
+		// a clone that shares ROMs with its parent needs the parent's zip
 		const char *pParent = s16_game_parent (nGame);
-		if (pParent[0])
+		if (s16_game_needs_parent (nGame))
 		{
 			char Path[128];
 			snprintf (Path, sizeof Path, "%s/%s.zip", S16PI_DIR, pParent);
 			FILINFO PInfo;
-			if (f_stat (Path, &PInfo) != FR_OK && s16_find (pParent) >= 0)
+			if (f_stat (Path, &PInfo) != FR_OK)
 			{
 				char Msg[160];
 				snprintf (Msg, sizeof Msg, "  %s: needs %s.zip too, skipped", Info.fname, pParent);
