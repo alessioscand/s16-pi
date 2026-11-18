@@ -36,8 +36,11 @@ uint8_t i8751_cpu::sfr_r (uint8_t a)
 	a -= 0x80;
 	switch (a)
 	{
-	case P0: case P1: case P2: case P3:
+	case P0: case P1: case P2:
 		return m_sfr[a] & m_bus.pPortRead (m_bus.pCtx, a >> 4);
+	case P3:	// with the /INT0 and /INT1 pins (as MAME)
+		return (uint8_t) (m_sfr[a] & m_bus.pPortRead (m_bus.pCtx, 3)
+				  & ~(m_s.int_state[0] ? 0x04 : 0) & ~(m_s.int_state[1] ? 0x08 : 0));
 	default:
 		return m_sfr[a];
 	}

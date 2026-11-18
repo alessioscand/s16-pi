@@ -19,6 +19,7 @@ static unsigned s_nTiles;
 static const u16 *s_pSprites;		// sprite ROMs as words in the host's order
 static u16 *s_pSprWords;
 static unsigned s_nSprBanks;		// of 0x10000 words
+static size_t s_nSprSize;
 static bool s_bAltBanks, s_bS18, s_b16A;
 static unsigned s_nBankSize;
 
@@ -54,6 +55,7 @@ void s16_video_init (const u8 *pTiles, size_t nTilesSize, const u8 *pSprites, si
 		s_pSprWords[i] = (u16) (pSprites[i * 2] << 8 | pSprites[i * 2 + 1]);
 	}
 	s_pSprites = s_pSprWords;
+	s_nSprSize = nSpritesSize;
 	s_nSprBanks = (unsigned) (nSpritesSize / 0x20000);
 }
 
@@ -61,7 +63,7 @@ void s16_video_init (const u8 *pTiles, size_t nTilesSize, const u8 *pSprites, si
 void s16_video_set_16a (bool b16A)
 {
 	s_b16A = b16A;
-	if (b16A && s_pSprWords) s_nSprBanks *= 2;
+	if (b16A && s_pSprWords) s_nSprBanks = (unsigned) (s_nSprSize / 0x10000);
 }
 
 unsigned s16_video_tiles (void)		{ return s_nTiles; }

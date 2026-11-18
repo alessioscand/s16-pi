@@ -100,8 +100,15 @@ public release: 1.0.0.
   frames for a while and comes back in step. Its sound is at MAME's level.
   The other System 18 sets have not been run: no ROMs here.
   System 16A: `shinobi` (with the 7751) identical to MAME at frames 300,
-  600 and 900; its sound follows MAME's, the 7751's samples included. The
-  other System 16A and the System 16C sets have not been run: no ROMs here.
+  600 and 900; its sound follows MAME's, the 7751's samples included.
+  `alexkidd`, `aliensyn`, `aliensyn5` (FD1089A), `bodyslam` (8751),
+  `fantzone`, `tetris` (FD1094), `wb3` and `wb35` (FD1089A) identical to
+  MAME at 20, 40, 60, 80 and 100 seconds of attract mode (with MAME's
+  work RAM blank), but for a frame of difference at one moment in `tetris`
+  and `wb35`. The 8751 of `bodyslam` reads the 68000's ROMs with the bytes
+  of each word swapped (as MAME), and waits for the vertical blank on its
+  /INT0 pin. The other System 16A and the System 16C sets have not been
+  run: no ROMs here.
   A clone whose zip leaves out ROMs it shares with its parent needs the
   parent's zip (`s16_game_needs_parent`); the others play on their own.
 - **Laser Ghost**: its three guns played with pads. The MSM6253 A/D

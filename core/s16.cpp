@@ -1423,6 +1423,7 @@ static u8 Mcu16AXRead (void *, u16 a)
 	switch ((M.nMcuControl >> 3) & 7)
 	{
 	case 0:
+		if (a < 0x3fff)			return 0;	// MAME: the watchdog, unmapped
 		if (a >= 0x4000 && a < 0x8000)	return (u8) m68k_read_memory_8 (0xc70001 ^ (a & 0x3fff));
 		if (a >= 0x8000 && a < 0xc000)	return (u8) m68k_read_memory_8 (0xc40001 ^ (a & 0x3fff));
 		return 0xff;
@@ -1431,9 +1432,10 @@ static u8 Mcu16AXRead (void *, u16 a)
 		if (a < 0x9000)	return (u8) m68k_read_memory_8 (0x410001 ^ (a & 0xfff));
 		return 0xff;
 	case 3:	return (u8) m68k_read_memory_8 (0x840001 ^ a);
-	case 5:	return s_pRegion[RGN_MAIN][0x00000 + a];
-	case 6:	return s_pRegion[RGN_MAIN][0x10000 + a];
-	case 7:	return s_pRegion[RGN_MAIN][0x20000 + a];
+	// the ROMs with the bytes of each word swapped, as MAME (Body Slam's checksum)
+	case 5:	return s_pRegion[RGN_MAIN][0x00000 + (a ^ 1)];
+	case 6:	return s_pRegion[RGN_MAIN][0x10000 + (a ^ 1)];
+	case 7:	return s_pRegion[RGN_MAIN][0x20000 + (a ^ 1)];
 	}
 	return 0xff;
 }
@@ -1465,7 +1467,10 @@ static void Mcu16APortWrite (void *, int nPort, u8 d)
 	const bool bReset = (d & 0x40) != 0;
 	if (M.bMainReset && !bReset)
 	{
+		// the 8751 lets it go for a few of its cycles at a time (Body Slam):
+		// its reset (40 cycles) and a turn of the 8751 before it runs
 		MainReset ();
+		M.nMainStall = 40 + (int) (s_nMainPerLine / SLICES >> 16);
 	}
 	M.bMainReset = bReset;
 	MainIrq (~d & 7);
