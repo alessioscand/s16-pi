@@ -11,8 +11,8 @@ s16-pi 1.0.0 - Bare-metal SEGA System 16 emulator for Raspberry Pi 3 and 4
 
   - Beam racing: each line is sent to the screen as soon as it is
     drawn, for the lowest possible lag.
-  - Scanlines (light, medium, strong) and a COMPOSITE filter that looks
-    like an old TV.
+  - TV filters: simple scanlines, an RGB monitor, a CRT TV and a
+    COMPOSITE filter that looks like an old TV.
   - Up to 4 players, save state, the games' own DIP switches.
   - Around the picture: the menus' grid and a thin frame, with the
     game's title, maker and year and what its buttons do (at 1080p).
@@ -123,13 +123,16 @@ OPTIONS MENU (D in the game list, or from the in-game menu)
   A or Left/Right changes a setting, B goes back. Settings are stored in
   s16pi/s16pi.cfg.
 
-  SCANLINES     OFF / LIGHT / MEDIUM / STRONG / COMPOSITE. COMPOSITE has no
-                scanlines: blargg's NTSC filter gives the look of a
-                composite video connection of the time. Each line is
-                filtered as soon as it is drawn, on its own CPU core: no
-                added lag. On a Pi 3 the scanlines and COMPOSITE need
-                multicore: with multicore=off this item shows MULTICORE
-                OFF.
+  TV FILTER     OFF    the plain picture
+                FAST   simple scanlines, the lightest
+                RGB    an RGB monitor (Hyllian's crt-hyllian-fast)
+                CRT    a CRT TV with its RGB mask (davej's crt-pi)
+                COMPOSITE  blargg's NTSC filter: the look of a composite
+                       video connection of the time
+                RGB, CRT and COMPOSITE filter each line as soon as it is
+                drawn, on its own CPU core: no added lag. On a Pi 3 the
+                filters need multicore: with multicore=off this item
+                shows MULTICORE OFF.
   BEZEL         The background. FULL (default): the grid, and while
                 playing at 1080p the game's title, maker and year above
                 the picture and what its buttons do below. GRID: the grid

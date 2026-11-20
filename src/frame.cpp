@@ -1,6 +1,7 @@
 /*
  * s16-pi - the emulated frame (see frame.h)
  */
+#include "crtfx.h"
 #include "frame.h"
 #include "mcline.h"
 #include "racing.h"
@@ -16,6 +17,7 @@ unsigned g_nAudioFrames;
 
 static CScreen *s_pVideo = 0;
 static u32 s_Line[GAME_W * 8], s_Dark[GAME_W * 8];	// core 1's scanline buffers
+#define TV_SHADER	0xFFFFu		// a TvPost phase: RGB or CRT
 static u32 s_TvLine[2][GAME_W * 8];		// core 2's, and the caller's without it
 
 // read by core 1 for each line; changed only while no line is queued
@@ -44,6 +46,10 @@ static void LineDone (unsigned nRow)
 		TvPost (g_VideoBuf + (nRow + GAME_SRC_Y) * GAME_SRC_PITCH + GAME_SRC_X,
 			(s_nTvBurst + nRow) % COMP_PHASES, nRow, SharedLoad (s_bRaced));
 	}
+	else if (CrtFxActive () && TvWorkerAlive ())	// RGB, CRT: on core 2 too
+	{
+		TvPost (0, TV_SHADER, nRow, SharedLoad (s_bRaced));	// core 2 reads the line from g_VideoBuf
+	}
 	else
 	{
 		s_pVideo->DrawGameLine (g_VideoBuf, nRow, s_Line, s_Dark);
@@ -54,9 +60,22 @@ static void LineDone (unsigned nRow)
 	}
 }
 
+// RGB, CRT on core 2: the line is drawn from the game's frame (set by the
+// filter, read by the output, both on the same core)
+static boolean s_bTvShader = FALSE;
+
 // core 2 (or the caller without it, nSide 1): a filtered line
 static void TvLineOut (unsigned nRow, const u32 *pNtsc, boolean bRace, unsigned nSide)
 {
+	if (s_bTvShader)
+	{
+		s_pVideo->DrawGameLine (g_VideoBuf, nRow, s_TvLine[nSide], s_TvLine[nSide]);
+		if (bRace)
+		{
+			RaceRowDone (nRow);
+		}
+		return;
+	}
 	s_pVideo->DrawNtscLine (nRow, pNtsc, COMP_OUT_W, s_TvLine[nSide]);
 	if (bRace)
 	{
@@ -70,7 +89,16 @@ static void *s_pTables = 0;
 
 static void CompositeLine (const void *pSource, unsigned nPhase, u32 *pOut)
 {
-	composite_line (s_pTables, (const unsigned *) pSource, GAME_W, nPhase, pOut);
+	s_bTvShader = nPhase == TV_SHADER;
+	if (!s_bTvShader)
+	{
+		composite_line (s_pTables, (const unsigned *) pSource, GAME_W, nPhase, pOut);
+	}
+}
+
+boolean FrameTvTables (void)
+{
+	return s_pTables != 0;
 }
 
 boolean FrameTvInit (void)
@@ -83,8 +111,8 @@ boolean FrameTvInit (void)
 			return FALSE;
 		}
 		composite_init (p, 0);
+		TvSync ();
 		s_pTables = p;
-		TvSetFilter (CompositeLine);
 	}
 	return TRUE;
 }
@@ -93,15 +121,19 @@ void FrameSetup (CScreen *pVideo)
 {
 	s_pVideo = pVideo;
 	TvSetOutput (TvLineOut);
+	TvSetFilter (CompositeLine);
 	McSetup (g_VideoBuf, GAME_SRC_PITCH, LineDone);
 }
 
 void FrameSync (void)
 {
 	McSync ();
+	if (s_bComposite || CrtFxActive ())
+	{
+		TvSync ();			// and core 2 its lines
+	}
 	if (s_bComposite)
 	{
-		TvSync ();
 		// the phase steps through all three values: the colour artifacts crawl
 		// along the edges even on a still picture (the classic dot crawl)
 		s_nTvBurst = (s_nTvBurst + 1) % COMP_PHASES;

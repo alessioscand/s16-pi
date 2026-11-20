@@ -195,7 +195,7 @@ void CKernel::RunSystemMenu (void)
 			break;
 		}
 
-		static const char *Labels[SmCount] = {"SCANLINES", "BEZEL", "CONTROLS", "POWER OFF"};
+		static const char *Labels[SmCount] = {"TV FILTER", "BEZEL", "CONTROLS", "POWER OFF"};
 		TMenuItem Items[SmCount];
 		for (unsigned i = 0; i < SmCount; i++)
 		{
@@ -203,7 +203,7 @@ void CKernel::RunSystemMenu (void)
 			Items[i].pValue = 0;
 			Items[i].bDisabled = FALSE;
 		}
-		static const char *FilterLabels[FILTER_COUNT] = {"OFF", "LIGHT", "MEDIUM", "STRONG", "COMPOSITE"};
+		static const char *FilterLabels[FILTER_COUNT] = {"OFF", "FAST", "RGB", "CRT", "COMPOSITE"};
 		// not allowed only on a Pi 3 with multicore=off
 		Items[SmFilter].pValue = m_bFilterAllowed ? FilterLabels[m_nFilter] : "MULTICORE OFF";
 		Items[SmFilter].bDisabled = !m_bFilterAllowed;
