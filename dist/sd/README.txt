@@ -54,7 +54,7 @@ START-UP
     at once. GAME LIST in the in-game menu still opens the list.
   - Game list: Up/Down to choose, Left/Right to jump by 8, A or Start to
     play, D for OPTIONS. A long title scrolls. Bottom left: the MAME set
-    name and region. With no pad connected, NO PAD on the left.
+    name and region.
   - Benchmark: an empty file named s16pi/BENCH (no extension) runs one on
     the selected game before normal play: 30 seconds of the game's demo,
     then 60 seconds measured. Do not touch anything. Results in
