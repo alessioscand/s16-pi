@@ -1,7 +1,7 @@
 ==============================================================================
 s16-pi
 ==============================================================================
-s16-pi - bare metal SEGA System 16 emulator for Raspberry Pi 3 and 4
+s16-pi - bare metal SEGA System 16 and 18 emulator for Raspberry Pi 3 and 4
 Copyright (C) 2026 Alessio Scanderebech
 
 This program is free software: you can redistribute it and/or modify it under
@@ -13,10 +13,10 @@ the end of this file.
 SEGA is a trademark of its owner. The games are not included.
 
 ==============================================================================
-MAME (the descriptions of the System 16B and System 18 boards, their video,
-the 315-5313 VDP, the uPD7759, the RF5C68 and the audio circuit, which
-s16-pi's core follows; the FD1094, FD1089 and MC-8123 decryption and the
-game tables, taken from it) - BSD 3-Clause
+MAME (the descriptions of the System 16A, 16B and 18 boards, their video,
+the 315-5313 VDP, the uPD7751, the uPD7759, the RF5C68 and the audio
+circuit, which s16-pi's core follows; the FD1094, FD1089 and MC-8123
+decryption and the game tables, taken from it) - BSD 3-Clause
 ==============================================================================
 Copyright (c) the MAME authors, among them Aaron Giles, David Haywood,
 Juergen Buchmueller, Mike Balfour, Howie Cohen, Olivier Galibert,
@@ -48,9 +48,6 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-The video mixing of sprites and tiles follows the MiSTer Irem M92 core by
-Martin Donlon (wickerwaka); no code of it is included.
 
 The hiscore table locations come from the hiscore.dat of MAME's hiscore
 plugin (Leezer and contributors, based on the unofficial hiscore.dat of
@@ -115,7 +112,7 @@ SOFTWARE.
 */
 
 ==============================================================================
-ymfm (YM2151 sound) - BSD 3-Clause
+ymfm (YM2151 and YM3438 sound) - BSD 3-Clause
 ==============================================================================
 /*
 Copyright (c) 2021 Aaron Giles

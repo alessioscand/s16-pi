@@ -1,5 +1,5 @@
-s16-pi 1.0.0 - Bare-metal SEGA System 16 emulator for Raspberry Pi 3 and 4
-============================================================================
+s16-pi 1.0.0 - Bare-metal SEGA System 16/18 emulator for Raspberry Pi 3 & 4
+===========================================================================
 
   The SEGA System 16A, 16B, 16C and System 18 games that play with a
   stick and buttons on a horizontal screen, 100 MAME sets, protected ones

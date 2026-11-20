@@ -96,7 +96,7 @@ TShutdownMode CKernel::Run (void)
 	}
 
 	char Line[180];
-	Log ("s16-pi - bare metal SEGA System 16 emulator", COLOR_TITLE);
+	Log ("s16-pi - bare metal SEGA System 16 and 18 emulator", COLOR_TITLE);
 	snprintf (Line, sizeof Line, "Version %s, built %s %s", PROJECT_VERSION, __DATE__, __TIME__);
 	Log (Line, COLOR_DIM);
 
