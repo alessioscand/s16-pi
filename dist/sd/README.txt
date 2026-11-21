@@ -1,13 +1,9 @@
 s16-pi 1.0.0 - Bare-metal SEGA System 16/18 emulator for Raspberry Pi 3 & 4
 ===========================================================================
 
-  The SEGA System 16A, 16B, 16C and System 18 games that play with a
-  stick and buttons on a horizontal screen, 100 MAME sets, protected ones
-  included: Fantasy Zone, Alex Kidd: The Lost Stars, Altered Beast, Golden
-  Axe, Shinobi, Alien Syndrome, Aurail, Wonder Boy III, ESWAT, Cotton,
-  Dynamite Dux, Riot City, Fantasy Zone II ... and on System 18 Shadow
-  Dancer, Moonwalker, Alien Storm, D. D. Crew, Bloxeed, Clutch Hitter and
-  Laser Ghost.
+  SEGA's arcades at their peak, from Fantasy Zone and Shinobi to Golden
+  Axe and Moonwalker: thirty games straight from the cabinets, with next
+  to no added lag.
 
   - Beam racing: each line is sent to the screen as soon as it is
     drawn, for the lowest possible lag.
@@ -16,23 +12,17 @@ s16-pi 1.0.0 - Bare-metal SEGA System 16/18 emulator for Raspberry Pi 3 & 4
   - Up to 4 players, save state, the games' own DIP switches.
   - Around the picture: the menus' grid and a thin frame, with the
     game's title, maker and year and what its buttons do (at 1080p).
-    OPTIONS > BEZEL: FULL, GRID, TEXT (on black) or OFF.
   - Hiscores are saved in s16pi/saves/<game>.hi (57 sets, as MAME's
     hiscore plugin).
   - Each game's battery-kept RAM (settings, bookkeeping, and the scores
     of the games that keep them there) is saved in
     s16pi/saves/<game>.nv: credits left in a game are still there next
-    time. To start a game afresh: DIP SWITCHES > CLEAR MEMORY (the last
-    row).
-  - Laser Ghost is played with the pads instead of its 3 guns: the stick
-    moves the crosshair (blue, yellow and red for players 1, 2 and 3; it
-    shows while the player is in the game), A fires, B is the bomb. The
-    first time, the game asks for its gun adjustment: s16-pi does it by
-    itself in about 15 seconds (GUN ADJUST), then keeps it in
-    saves/lghost.nv.
+    time. To start a game afresh: DIP SWITCHES > CLEAR MEMORY.
+  - Laser Ghost is played with the pads: the stick moves the crosshair,
+    A fires, B is the bomb. The guns' adjustment is done by itself the
+    first time (GUN ADJUST).
 
-  Vertical games (Passing Shot, Time Scanner, Action Fighter, Desert
-  Breaker) are not supported yet.
+  Vertical games are not supported yet.
 
 SET-UP
 
@@ -40,10 +30,10 @@ SET-UP
      table.
   2. Copy EVERYTHING in this folder to the card's root.
   3. Put your games in the s16pi folder as MAME ROM sets, one .zip per
-     set with MAME's file name (goldnaxe.zip, mwalk.zip...), from a
-     recent MAME. A clone also needs its parent's zip when it shares
-     ROMs with it, as most do (goldnaxe1.zip needs goldnaxe.zip,
-     shinobi2.zip needs shinobi.zip).
+     set with MAME's file name (goldnaxe.zip, mwalk.zip...). A clone
+     also needs its parent's zip when it shares ROMs with it, as most do
+     (goldnaxe1.zip needs goldnaxe.zip). ROMs are identified by CRC, so
+     sets from other MAME versions work.
   4. Connect a USB gamepad and the display (on a Pi 4, HDMI 0, next to the
      power socket). Insert the card and switch on.
 
@@ -65,6 +55,9 @@ START-UP
     Results in s16pi/MCTEST.TXT. Delete MCTEST to start normally.
 
 SETTING UP THE CONTROLS
+
+  Although wireless gamepads are supported, wired ones are preferable for
+  maximum responsiveness.
 
   The first time a pad model is connected, the CONTROLS screen opens by
   itself. Press the button you want for each function, in this order: A,
@@ -108,9 +101,11 @@ IN-GAME MENU (hold Select for 1 second; B resumes the game)
   DIP SWITCHES  The board's switches (difficulty, lives, coinage,
                 cabinet...). A or Left/Right changes, B goes back. Many
                 games read them only at start-up: SOME APPLY AFTER RESET.
-                Saved per game. The last row, CLEAR MEMORY, wipes the
-                game's battery-kept RAM (MEMORY CLEARED) and restarts it
-                afresh (Laser Ghost: GUN ADJUST again); hiscores are kept.
+                Under the panel, where the selected switch is on the
+                board (e.g. SW1:1,2). Saved per game. The last row, CLEAR
+                MEMORY, wipes the game's battery-kept RAM (MEMORY
+                CLEARED) and restarts it afresh (Laser Ghost: GUN ADJUST
+                again); hiscores are kept.
   OPTIONS       The OPTIONS menu, over the paused game; B comes back here.
   RESET         Restart the game.
   GAME LIST     Back to the game list.
@@ -133,14 +128,17 @@ OPTIONS MENU (D in the game list, or from the in-game menu)
                 drawn, on its own CPU core: no added lag. On a Pi 3 the
                 filters need multicore: with multicore=off this item
                 shows MULTICORE OFF.
-  BEZEL         The background. FULL (default): the grid, and while
-                playing at 1080p the game's title, maker and year above
-                the picture and what its buttons do below. GRID: the grid
-                only. TEXT: the texts on black. OFF: black. With TEXT and
-                OFF the menus are on black too. In s16pi.cfg: bezel=full,
-                grid, text or off.
+  BEZEL         The space around the picture:
+                OFF    black
+                TEXT   game information and basic controls on black
+                       (at 1080p)
+                GRID   the dark grid
+                FULL   the complete bezel, with game information above
+                       the picture and button assignments below (at
+                       1080p; the default)
   CONTROLS      Set up a pad (with several pads, press a button on the one
-                to set up).
+                to set up). To skip a function, press a button already
+                assigned.
   POWER OFF     As in the in-game menu.
 
 STATUS LINE (Select + C)
