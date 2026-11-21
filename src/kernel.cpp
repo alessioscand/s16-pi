@@ -70,6 +70,9 @@ CKernel::CKernel (void)
 {
 	s_pThis = this;
 	m_LastRaw[0] = '\0';
+	memset (m_Lines, 0, sizeof m_Lines);
+	memset (m_LineColor, 0, sizeof m_LineColor);
+	memset (&m_Play, 0, sizeof m_Play);
 }
 
 CKernel::~CKernel (void)
@@ -124,7 +127,7 @@ TShutdownMode CKernel::Run (void)
 	f_mkdir (SHOT_DIR);
 	FrameSetup (&m_Video);
 	LoadConfig ();
-	// the scanlines need a Pi 4, or a Pi 3 with core 1 drawing the lines
+	// the TV filters need a Pi 4, or a Pi 3 with core 1 drawing the lines
 	m_bFilterAllowed = pInfo->GetModelMajor () >= 4 || m_bMultiCore;
 	if (!m_bFilterAllowed)
 	{
