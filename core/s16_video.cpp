@@ -23,7 +23,7 @@ static size_t s_nSprSize;
 static bool s_bAltBanks, s_bS18, s_b16A;
 static unsigned s_nBankSize;
 
-void s16_video_init (const u8 *pTiles, size_t nTilesSize, const u8 *pSprites, size_t nSpritesSize,
+bool s16_video_init (const u8 *pTiles, size_t nTilesSize, const u8 *pSprites, size_t nSpritesSize,
 		     bool bAltBanks, unsigned nBankSize, bool bS18)
 {
 	s_bAltBanks = bAltBanks;
@@ -33,7 +33,11 @@ void s16_video_init (const u8 *pTiles, size_t nTilesSize, const u8 *pSprites, si
 	// is the most significant bit
 	const size_t nPlane = nTilesSize / 3;
 	s_nTiles = (unsigned) (nPlane / 8);
-	s_pTilePix = (u8 *) malloc ((size_t) s_nTiles * 64);
+	s_pTilePix = s_nTiles ? (u8 *) malloc ((size_t) s_nTiles * 64) : 0;
+	if (!s_pTilePix)
+	{
+		return false;
+	}
 	for (unsigned t = 0; t < s_nTiles; t++)
 	{
 		for (unsigned r = 0; r < 8; r++)
@@ -50,6 +54,11 @@ void s16_video_init (const u8 *pTiles, size_t nTilesSize, const u8 *pSprites, si
 	// sprites: big endian words
 	const size_t nWords = nSpritesSize / 2;
 	s_pSprWords = (u16 *) malloc (nWords * 2);
+	if (nWords && !s_pSprWords)
+	{
+		s16_video_exit ();
+		return false;
+	}
 	for (size_t i = 0; i < nWords; i++)
 	{
 		s_pSprWords[i] = (u16) (pSprites[i * 2] << 8 | pSprites[i * 2 + 1]);
@@ -57,6 +66,7 @@ void s16_video_init (const u8 *pTiles, size_t nTilesSize, const u8 *pSprites, si
 	s_pSprites = s_pSprWords;
 	s_nSprSize = nSpritesSize;
 	s_nSprBanks = (unsigned) (nSpritesSize / 0x20000);
+	return true;
 }
 
 // System 16A: sprite banks of 0x8000 words
@@ -174,7 +184,7 @@ static void LayerLine (const TS16Video *pV, int nWhich, int y, u16 *pLine)
 	const unsigned nX0 = (0xc0 - nEffX) & 0x3ff;
 
 	unsigned nTileX = ~0u, nTileRow = 0;
-	const u8 *pPix = 0;
+	const u8 *pPix = s_pTilePix;
 	u16 nBase = 0;
 	unsigned nVY = (unsigned) (y + nYScroll) & 0x1ff;
 	for (int x = 0; x < S16_WIDTH; x++)
@@ -333,7 +343,7 @@ static void LayerLine16A (const TS16Video *pV, int nWhich, int y, u16 *pLine)
 	unsigned nVY = (unsigned) (y + (pText[0xf24 / 2 + nWhich] & 0xff)) & 0x1ff;
 
 	unsigned nTileX = ~0u, nTileRow = 0;
-	const u8 *pPix = 0;
+	const u8 *pPix = s_pTilePix;
 	u16 nBase = 0;
 	for (int x = 0; x < S16_WIDTH; x++)
 	{

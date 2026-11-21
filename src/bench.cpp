@@ -12,7 +12,7 @@
 static_assert (BENCH_FRAMES <= STATS_MAX_VALUES, "ComputeStats sorts at most STATS_MAX_VALUES");
 
 #define BENCH_PROFILE_US 200		// profiler: one sample every 200 us
-#define BENCH_SLOW_US	16000		// frames from 16 ms on count as slow
+#define BENCH_SLOW_US	16000u		// frames from 16 ms on count as slow
 
 // MCTEST (s16pi/MCTEST): 60 s of demo from one save state, 4 passes: 1 single
 // core (warm-up), 2 single core (reference), 3 and 4 multicore; every line of
@@ -322,7 +322,7 @@ void CKernel::Benchmark (void)
 		REPORT (COLOR_TEXT);
 	}
 	snprintf (Line, sizeof Line, "Audio: %u stereo samples per frame at %u Hz",
-		  (unsigned) (nSamples / BENCH_FRAMES), SAMPLE_RATE);
+		  (unsigned) (nSamples / BENCH_FRAMES), (unsigned) SAMPLE_RATE);
 	REPORT (COLOR_DIM);
 	// same game + same build options must give the same picture after the
 	// same number of frames: used to check compiler optimisations

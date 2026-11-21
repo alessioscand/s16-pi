@@ -47,9 +47,9 @@ int snprintf (char *pBuffer, size_t nSize, const char *pFormat, ...);
 #define SHOT_DIR	S16PI_DIR "/shots"
 
 #define SAMPLE_RATE	48000
-#define BENCH_WARMUP	1800		// 30 s of play before measuring
-#define BENCH_FRAMES	3600		// then 60 s measured
-#define MCTEST_FRAMES	3600
+#define BENCH_WARMUP	1800u		// 30 s of play before measuring
+#define BENCH_FRAMES	3600u		// then 60 s measured
+#define MCTEST_FRAMES	3600u
 
 #define COLOR_TEXT	RGB (220, 220, 220)
 #define COLOR_TITLE	RGB (255, 200, 0)

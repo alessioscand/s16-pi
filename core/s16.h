@@ -156,8 +156,8 @@ struct TS16Video
 };
 
 // bAltBanks: the sprite banks of the 171-5358 boards; nBankSize: tiles in a
-// tile bank (System 16B 4096, System 18 1024)
-void s16_video_init (const u8 *pTiles, size_t nTilesSize, const u8 *pSprites, size_t nSpritesSize,
+// tile bank (System 16B 4096, System 18 1024); false: out of memory
+bool s16_video_init (const u8 *pTiles, size_t nTilesSize, const u8 *pSprites, size_t nSpritesSize,
 		     bool bAltBanks, unsigned nBankSize, bool bS18);
 void s16_video_set_16a (bool b16A);		// System 16A layers and sprites
 unsigned s16_video_tiles (void);

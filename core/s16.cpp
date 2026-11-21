@@ -1791,10 +1791,14 @@ int s16_load (int nGame, TS16Fetch *pFetch, void *pCtx, char *pMissing, size_t n
 		s_nMcuPerLine = FIX (8000000.0 / 12, fLine);
 		s_n7751PerLine = FIX (6000000.0 / 15, fLine);
 	}
-	s16_video_init (s_pRegion[RGN_TILES], pGame->RegionSize[RGN_TILES],
-			s_pRegion[RGN_SPRITES], pGame->RegionSize[RGN_SPRITES],
-			pGame->nBoard == BOARD_5358 || pGame->nBoard == BOARD_5358_SMALL,
-			s_bS18 ? 0x400 : 0x1000, s_bS18);
+	if (!s16_video_init (s_pRegion[RGN_TILES], pGame->RegionSize[RGN_TILES],
+			     s_pRegion[RGN_SPRITES], pGame->RegionSize[RGN_SPRITES],
+			     pGame->nBoard == BOARD_5358 || pGame->nBoard == BOARD_5358_SMALL,
+			     s_bS18 ? 0x400 : 0x1000, s_bS18))
+	{
+		s16_unload ();
+		return 0;
+	}
 	s16_video_set_16a (s_bS16A);
 	memset (&M, 0, sizeof M);
 	M.nDsw = pGame->pInputs->nDswDefault;
